@@ -1,0 +1,68 @@
+---
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: 'AWS::Serverless-2016-10-31'
+
+Parameters:
+  SSMKeyArn:
+    Type: String
+  SSMKeyName:
+    Type: String
+    Default: "pd-oncall-chat-topic"
+  Bucket:
+    Type: String
+  md5:
+    Type: String
+
+Resources:
+  ChatTopicRole:
+    Type: AWS::IAM::Role
+    Properties:
+      ManagedPolicyArns:
+      - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Sid: 'Lambda'
+          Principal:
+            Service:
+            - lambda.amazonaws.com
+          Action:
+            - sts:AssumeRole
+      Path: "/cfn/"
+      Policies:
+      - PolicyName: SSM
+        PolicyDocument:
+          Statement:
+          - Effect: Allow
+            Action:
+            - ssm:GetParameters
+            Resource:
+            - !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${SSMKeyName}"
+      - PolicyName: KMS
+        PolicyDocument:
+          Statement:
+          - Effect: Allow
+            Action:
+            - kms:Decrypt
+            Resource:
+            - !Ref SSMKeyArn
+
+  ChatTopicFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: main.handler
+      Runtime: python3.6
+      Timeout: 2
+      CodeUri:
+        Bucket: !Ref Bucket
+        Key: !Ref md5
+      Environment:
+        Variables:
+          API_KEY_NAME: !Ref SSMKeyName
+      Role: !GetAtt ChatTopicRole.Arn
+      Events:
+        Cron:
+          Type: Schedule
+          Properties:
+              Schedule: 'rate(5 minutes)'
