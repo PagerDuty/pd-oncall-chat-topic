@@ -26,7 +26,7 @@ def get_user(schedule_id):
     payload['since'] = t.isoformat()
     payload['until'] = datetime.datetime.now().isoformat()
     r = requests.get(url, headers=headers, params=payload)
-    return = r.json()['users'][0]['name']
+    return r.json()['users'][0]['name']
 
 def handler(event, context):
     print(event)
