@@ -5,9 +5,12 @@ Transform: 'AWS::Serverless-2016-10-31'
 Parameters:
   SSMKeyArn:
     Type: String
-  SSMKeyName:
+  PDSSMKeyName:
     Type: String
     Default: "pd-oncall-chat-topic"
+  SlackSSMKeyName:
+    Type: String
+    Default: "pd-oncall-chat-topic-slack"
   Bucket:
     Type: String
   md5:
@@ -38,7 +41,8 @@ Resources:
             Action:
             - ssm:GetParameters
             Resource:
-            - !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${SSMKeyName}"
+            - !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${PDSSMKeyName}"
+            - !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${SlackSSMKeyName}"
       - PolicyName: KMS
         PolicyDocument:
           Statement:
@@ -53,13 +57,14 @@ Resources:
     Properties:
       Handler: main.handler
       Runtime: python3.6
-      Timeout: 2
+      Timeout: 120
       CodeUri:
         Bucket: !Ref Bucket
         Key: !Ref md5
       Environment:
         Variables:
-          API_KEY_NAME: !Ref SSMKeyName
+          PD_API_KEY_NAME: !Ref PDSSMKeyName
+          SLACK_API_KEY_NAME: !Ref SlackSSMKeyName
       Role: !GetAtt ChatTopicRole.Arn
       Events:
         Cron:

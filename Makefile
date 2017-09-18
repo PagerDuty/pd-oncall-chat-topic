@@ -19,6 +19,7 @@ deploy:
 		"Bucket=$(BUCKET)" \
 		"md5=$(MD5)" \
 		"SSMKeyArn"=$(SSMKeyArn) \
-		"SSMKeyName"=$(STACKNAME_BASE) \
+		"PDSSMKeyName"=$(STACKNAME_BASE) \
+		"SlackSSMKeyName"=$(STACKNAME_BASE)-slack \
 		--capabilities CAPABILITY_IAM || exit 0
 

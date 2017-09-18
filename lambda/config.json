@@ -1,7 +1,7 @@
 {
-    "lambda-schedule":
+    "test-lambda":
     {
-        "slack": "asd",
+        "slack": "C7534UEQ5",
         "schedule": "PE2YCCO"
     },
     "fake":
