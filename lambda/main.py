@@ -35,6 +35,16 @@ def get_user(schedule_id):
         print(r.json())
         return None
 
+def get_slack_topic(channel):
+    payload = {}
+    payload['token'] = boto3.client('ssm').get_parameters(
+        Names=[os.environ['SLACK_API_KEY_NAME']],
+        WithDecryption=True)['Parameters'][0]['Value']
+    payload['channel'] = channel
+    r = requests.post('https://slack.com/api/channels.info', data=payload)
+    print(r.json())
+    return r.json()['channel']['topic']['value']
+
 def update_slack_topic(channel, topic):
     payload = {}
     payload['token'] = boto3.client('ssm').get_parameters(
@@ -53,6 +63,7 @@ def handler(event, context):
         print(configset[i])
         if 'schedule' in configset[i]:
             if 'slack' in configset[i]:
+                slackid = configset[i]['slack']
                 u = get_user(configset[i]['schedule'])
                 topic = "{} is on-call for {}".format(
                         u, i
@@ -60,7 +71,10 @@ def handler(event, context):
                 print(u)
                 print(topic)
                 if u is not None:
-                    update_slack_topic(configset[i]['slack'], topic)
+                    if get_slack_topic(slackid) != topic:
+                        update_slack_topic(slackid, topic)
+                    else:
+                        print("Not updating, topic is the same")
 
 if __name__ == '__main__':
     get_user('P31BKVS')
