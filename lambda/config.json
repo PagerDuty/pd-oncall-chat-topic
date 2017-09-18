@@ -1,0 +1,12 @@
+{
+    "lambda-schedule":
+    {
+        "slack": "asd",
+        "schedule": "PE2YCCO"
+    },
+    "fake":
+    {
+        "slack": "asdfasdf",
+        "schedule": "4567"
+    }
+}
