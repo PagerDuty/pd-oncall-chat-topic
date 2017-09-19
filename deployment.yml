@@ -51,6 +51,24 @@ Resources:
             - kms:Decrypt
             Resource:
             - !Ref SSMKeyArn
+      - PolicyName: DDB
+        PolicyDocument:
+          Statement:
+          - Effect: Allow
+            Action:
+            - dynamodb:scan
+            Resource:
+            - !GetAtt ConfigTable.Arn
+
+  ConfigTable:
+    Type: AWS::Serverless::SimpleTable
+    Properties:
+      PrimaryKey:
+        Name: schedule
+        Type: String
+      ProvisionedThroughput:
+        ReadCapacityUnits: 1
+        WriteCapacityUnits: 1
 
   ChatTopicFunction:
     Type: AWS::Serverless::Function
@@ -65,6 +83,7 @@ Resources:
         Variables:
           PD_API_KEY_NAME: !Ref PDSSMKeyName
           SLACK_API_KEY_NAME: !Ref SlackSSMKeyName
+          CONFIG_TABLE: !Ref ConfigTable
       Role: !GetAtt ChatTopicRole.Arn
       Events:
         Cron:
