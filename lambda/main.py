@@ -2,11 +2,8 @@
 
 import os
 import datetime
-import json
 from botocore.vendored import requests
 import boto3
-
-
 
 # Get the Current User on-call for a given schedule
 def get_user(schedule_id):
@@ -57,24 +54,27 @@ def update_slack_topic(channel, topic):
 
 def handler(event, context):
     print(event)
-    configset = json.load(open('config.json'))
-    for i in configset.keys():
+    ddb = boto3.client('dynamodb')
+    response = ddb.scan(
+                TableName=os.environ['CONFIG_TABLE'],
+                )
+    for i in response['Items']:
         print("Operating on {}".format(i))
-        print(configset[i])
-        if 'schedule' in configset[i]:
-            if 'slack' in configset[i]:
-                slackid = configset[i]['slack']
-                u = get_user(configset[i]['schedule'])
-                topic = "{} is on-call for {}".format(
-                        u, i
-                        )
-                print(u)
-                print(topic)
-                if u is not None:
-                    if get_slack_topic(slackid) != topic:
-                        update_slack_topic(slackid, topic)
-                    else:
-                        print("Not updating, topic is the same")
+        # schedule will ALWAYS be there, it is a ddb primarykey
+        schedule = i['schedule']['S']
+        u = get_user(schedule)
+        topic = "{} is on-call for {}".format(u, "schedule")
+        if 'slack' in i.keys():
+            slack = i['slack']['S']
+            if u is not None:
+                if get_slack_topic(slack) != topic:
+                    update_slack_topic(slack, topic)
+                else:
+                    print("Not updating slack, topic is the same")
+        elif 'hipchat' in i.keys():
+            hipchat = i['hipchat']['S']
+            print("HipChat is not supported yet. Ignoring this entry...")
+            continue
 
 if __name__ == '__main__':
     get_user('P31BKVS')
