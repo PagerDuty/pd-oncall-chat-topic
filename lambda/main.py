@@ -5,13 +5,14 @@ import datetime
 from botocore.vendored import requests
 import boto3
 
+# Fetch the PD API token from PD_API_KEY_NAME key in SSM
+PD_API_KEY = boto3.client('ssm').get_parameters(
+        Names=[os.environ['PD_API_KEY_NAME']],
+        WithDecryption=True)['Parameters'][0]['Value']
+
 # Get the Current User on-call for a given schedule
 def get_user(schedule_id):
-    # Fetch the PD API token from PD_API_KEY_NAME key in SSM
-    PD_API_KEY = boto3.client('ssm').get_parameters(
-            Names=[os.environ['PD_API_KEY_NAME']],
-            WithDecryption=True)['Parameters'][0]['Value']
-
+    global PD_API_KEY
     headers = {
             'Accept': 'application/vnd.pagerduty+json;version=2',
             'Authorization': 'Token token={token}'.format(token=PD_API_KEY)
@@ -27,6 +28,23 @@ def get_user(schedule_id):
     r = requests.get(url, headers=headers, params=payload)
     try:
         return r.json()['users'][0]['name']
+    except KeyError:
+        print(r.status_code)
+        print(r.json())
+        return None
+
+def get_pd_schedule_name(schedule_id):
+    global PD_API_KEY
+    headers = {
+            'Accept': 'application/vnd.pagerduty+json;version=2',
+            'Authorization': 'Token token={token}'.format(token=PD_API_KEY)
+            }
+    url = 'https://api.pagerduty.com/schedules/{0}'.format(
+        schedule_id
+    )
+    r = requests.get(url, headers=headers)
+    try:
+        return r.json()['schedule']['name']
     except KeyError:
         print(r.status_code)
         print(r.json())
@@ -56,6 +74,7 @@ def update_slack_topic(channel, topic):
         print("Not updating slack, topic is the same")
         return None
 
+
 def handler(event, context):
     print(event)
     ddb = boto3.client('dynamodb')
@@ -67,7 +86,7 @@ def handler(event, context):
         # schedule will ALWAYS be there, it is a ddb primarykey
         schedule = i['schedule']['S']
         u = get_user(schedule)
-        topic = "{} is on-call for {}".format(u, "schedule")
+        topic = "{} is on-call for {}".format(u, get_pd_schedule_name(schedule))
         if 'slack' in i.keys():
             slack = i['slack']['S']
             update_slack_topic(slack, topic)
