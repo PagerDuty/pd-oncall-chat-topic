@@ -49,8 +49,12 @@ def update_slack_topic(channel, topic):
         WithDecryption=True)['Parameters'][0]['Value']
     payload['channel'] = channel
     payload['topic'] = topic
-    r = requests.post('https://slack.com/api/channels.setTopic', data=payload)
-    return r.json()
+    if get_slack_topic(channel) != topic:
+        r = requests.post('https://slack.com/api/channels.setTopic', data=payload)
+        return r.json()
+    else:
+        print("Not updating slack, topic is the same")
+        return None
 
 def handler(event, context):
     print(event)
@@ -66,11 +70,7 @@ def handler(event, context):
         topic = "{} is on-call for {}".format(u, "schedule")
         if 'slack' in i.keys():
             slack = i['slack']['S']
-            if u is not None:
-                if get_slack_topic(slack) != topic:
-                    update_slack_topic(slack, topic)
-                else:
-                    print("Not updating slack, topic is the same")
+            update_slack_topic(slack, topic)
         elif 'hipchat' in i.keys():
             hipchat = i['hipchat']['S']
             print("HipChat is not supported yet. Ignoring this entry...")
