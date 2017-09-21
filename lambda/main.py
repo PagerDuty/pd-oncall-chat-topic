@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 import os
-import datetime
+from datetime import datetime, timezone, timedelta
 from botocore.vendored import requests
 import boto3
 
@@ -17,21 +17,26 @@ def get_user(schedule_id):
             'Accept': 'application/vnd.pagerduty+json;version=2',
             'Authorization': 'Token token={token}'.format(token=PD_API_KEY)
             }
-    url = 'https://api.pagerduty.com/schedules/{0}/users'.format(
+    normal_schedule_url = 'https://api.pagerduty.com/schedules/{0}/users'.format(
+        schedule_id
+    )
+    override_schedule_url = 'https://api.pagerduty.com/schedules/{0}/overrides'.format(
         schedule_id
     )
     # This value should be less than the running interval
-    t = datetime.datetime.now() - datetime.timedelta(minutes=1)
+    t = datetime.now(timezone.utc) - timedelta(minutes=1)
     payload = {}
     payload['since'] = t.isoformat()
-    payload['until'] = datetime.datetime.now().isoformat()
-    r = requests.get(url, headers=headers, params=payload)
+    payload['until'] = datetime.now().isoformat()
+    # If there is no override, then check the schedule directly
+    override = requests.get(override_schedule_url, headers=headers, params=payload)
     try:
-        return r.json()['users'][0]['name']
-    except KeyError:
-        print(r.status_code)
-        print(r.json())
-        return None
+        username = override.json()['overrides'][0]['user']['summary'] + " (Override)"
+    except IndexError:
+        normal = requests.get(normal_schedule_url, headers=headers, params=payload)
+        username = normal.json()['users'][0]['name']
+    print("Currently on call: {}".format(username))
+    return username
 
 def get_pd_schedule_name(schedule_id):
     global PD_API_KEY
@@ -60,14 +65,24 @@ def get_slack_topic(channel):
     print(r.json())
     return r.json()['channel']['topic']['value']
 
-def update_slack_topic(channel, topic):
+def update_slack_topic(channel, proposed_update):
     payload = {}
     payload['token'] = boto3.client('ssm').get_parameters(
         Names=[os.environ['SLACK_API_KEY_NAME']],
         WithDecryption=True)['Parameters'][0]['Value']
     payload['channel'] = channel
-    payload['topic'] = topic
-    if get_slack_topic(channel) != topic:
+
+    # This is tricky to get correct
+    current_full_topic = get_slack_topic(channel)
+    try:
+        first_part = current_full_topic.split('|')[0].strip()
+        second_part = current_full_topic.split('|')[1].strip()
+    except IndexError: # if there is no '|' in the topic
+        first_part = "none"
+        second_part = current_full_topic
+
+    if proposed_update != first_part:
+        payload['topic'] = "{} | {}".format(proposed_update, second_part)
         r = requests.post('https://slack.com/api/channels.setTopic', data=payload)
         return r.json()
     else:
@@ -85,8 +100,8 @@ def handler(event, context):
         print("Operating on {}".format(i))
         # schedule will ALWAYS be there, it is a ddb primarykey
         schedule = i['schedule']['S']
-        u = get_user(schedule)
-        topic = "{} is on-call for {}".format(u, get_pd_schedule_name(schedule))
+        username = get_user(schedule)
+        topic = "{} is on-call for {}".format(username, get_pd_schedule_name(schedule))
         if 'slack' in i.keys():
             slack = i['slack']['S']
             update_slack_topic(slack, topic)
