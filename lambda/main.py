@@ -7,6 +7,10 @@ import threading
 from botocore.vendored import requests
 import boto3
 
+# semaphore limit of 5
+maxthreads = 5
+sema = threading.Semaphore(value=maxthreads)
+
 # Fetch the PD API token from PD_API_KEY_NAME key in SSM
 PD_API_KEY = boto3.client('ssm').get_parameters(
         Names=[os.environ['PD_API_KEY_NAME']],
@@ -92,6 +96,7 @@ def update_slack_topic(channel, proposed_update):
         return None
 
 def do_work(obj):
+    sema.acquire()
     # entrypoint of the thread
     print("Operating on {}".format(obj))
     # schedule will ALWAYS be there, it is a ddb primarykey
@@ -104,6 +109,7 @@ def do_work(obj):
     elif 'hipchat' in obj.keys():
         hipchat = i['hipchat']['S']
         print("HipChat is not supported yet. Ignoring this entry...")
+    sema.release()
 
 def handler(event, context):
     print(event)
