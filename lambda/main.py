@@ -40,7 +40,7 @@ def get_user(schedule_id):
     t = datetime.now(timezone.utc) - timedelta(minutes=1)
     payload = {}
     payload['since'] = t.isoformat()
-    payload['until'] = datetime.now().isoformat()
+    payload['until'] = datetime.now(timezone.utc).isoformat()
     # If there is no override, then check the schedule directly
     override = requests.get(override_schedule_url, headers=headers, params=payload)
     if override.status_code == 404:
