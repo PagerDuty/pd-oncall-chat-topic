@@ -43,6 +43,9 @@ def get_user(schedule_id):
     payload['until'] = datetime.now().isoformat()
     # If there is no override, then check the schedule directly
     override = requests.get(override_schedule_url, headers=headers, params=payload)
+    if override.status_code == 404:
+        logger.debug("ABORT: Not a valid schedule: {}".format(schedule_id))
+        return False
     try:
         username = override.json()['overrides'][0]['user']['summary'] + " (Override)"
         logger.debug("Currently on call (Override): {}".format(username))
@@ -114,13 +117,14 @@ def do_work(obj):
     # schedule will ALWAYS be there, it is a ddb primarykey
     schedule = obj['schedule']['S']
     username = get_user(schedule)
-    topic = "{} is on-call for {}".format(username, get_pd_schedule_name(schedule))
-    if 'slack' in obj.keys():
-        slack = obj['slack']['S']
-        update_slack_topic(slack, topic)
-    elif 'hipchat' in obj.keys():
-        hipchat = i['hipchat']['S']
-        logger.debug("HipChat is not supported yet. Ignoring this entry...")
+    if username:
+        topic = "{} is on-call for {}".format(username, get_pd_schedule_name(schedule))
+        if 'slack' in obj.keys():
+            slack = obj['slack']['S']
+            update_slack_topic(slack, topic)
+        elif 'hipchat' in obj.keys():
+            hipchat = i['hipchat']['S']
+            logger.debug("HipChat is not supported yet. Ignoring this entry...")
     sema.release()
 
 def handler(event, context):
