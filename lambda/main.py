@@ -8,7 +8,7 @@ import logging
 from botocore.vendored import requests
 import boto3
 
-# semaphore limit of 5
+# semaphore limit of 5, picked this number arbitrarily
 maxthreads = 5
 sema = threading.Semaphore(value=maxthreads)
 
@@ -36,6 +36,7 @@ def get_user(schedule_id):
         schedule_id
     )
     # This value should be less than the running interval
+    # It is best to use UTC for the datetime object
     t = datetime.now(timezone.utc) - timedelta(minutes=1)
     payload = {}
     payload['since'] = t.isoformat()
@@ -107,12 +108,9 @@ def update_slack_topic(channel, proposed_update):
         return None
 
 def do_work(obj):
-    sema.acquire()
     # entrypoint of the thread
+    sema.acquire()
     logger.debug("Operating on {}".format(obj))
-    logger.debug(type(obj))
-    logger.debug(obj)
-    logger.debug(obj.keys())
     # schedule will ALWAYS be there, it is a ddb primarykey
     schedule = obj['schedule']['S']
     username = get_user(schedule)
