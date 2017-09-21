@@ -2,6 +2,8 @@
 
 import os
 from datetime import datetime, timezone, timedelta
+import threading
+
 from botocore.vendored import requests
 import boto3
 
@@ -89,6 +91,19 @@ def update_slack_topic(channel, proposed_update):
         print("Not updating slack, topic is the same")
         return None
 
+def do_work(obj):
+    # entrypoint of the thread
+    print("Operating on {}".format(obj))
+    # schedule will ALWAYS be there, it is a ddb primarykey
+    schedule = obj['schedule']['S']
+    username = get_user(schedule)
+    topic = "{} is on-call for {}".format(username, get_pd_schedule_name(schedule))
+    if 'slack' in obj.keys():
+        slack = obj['slack']['S']
+        update_slack_topic(slack, topic)
+    elif 'hipchat' in obj.keys():
+        hipchat = i['hipchat']['S']
+        print("HipChat is not supported yet. Ignoring this entry...")
 
 def handler(event, context):
     print(event)
@@ -96,19 +111,11 @@ def handler(event, context):
     response = ddb.scan(
                 TableName=os.environ['CONFIG_TABLE'],
                 )
+    threads = []
     for i in response['Items']:
-        print("Operating on {}".format(i))
-        # schedule will ALWAYS be there, it is a ddb primarykey
-        schedule = i['schedule']['S']
-        username = get_user(schedule)
-        topic = "{} is on-call for {}".format(username, get_pd_schedule_name(schedule))
-        if 'slack' in i.keys():
-            slack = i['slack']['S']
-            update_slack_topic(slack, topic)
-        elif 'hipchat' in i.keys():
-            hipchat = i['hipchat']['S']
-            print("HipChat is not supported yet. Ignoring this entry...")
-            continue
+        t = threading.Thread(target=do_work, args=(i,))
+        threads.append(t)
+        t.start()
 
 if __name__ == '__main__':
     get_user('P31BKVS')
