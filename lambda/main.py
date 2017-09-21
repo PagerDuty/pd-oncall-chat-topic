@@ -136,6 +136,7 @@ def handler(event, context):
         t = threading.Thread(target=do_work, args=(i,))
         threads.append(t)
         t.start()
+        t.join()
 
 if __name__ == '__main__':
     get_user('P31BKVS')
