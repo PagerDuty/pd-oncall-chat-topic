@@ -47,8 +47,9 @@ def get_user(schedule_id):
         logger.debug("ABORT: Not a valid schedule: {}".format(schedule_id))
         return False
     try:
+        # TODO: This doesn't work with multiple overrides
         username = override.json()['overrides'][0]['user']['summary'] + " (Override)"
-        logger.debug("Currently on call (Override): {}".format(username))
+        logger.debug("Currently on call: {}".format(username))
     except IndexError:
         normal = requests.get(normal_schedule_url, headers=headers, params=payload)
         username = normal.json()['users'][0]['name']
@@ -123,7 +124,7 @@ def do_work(obj):
             slack = obj['slack']['S']
             update_slack_topic(slack, topic)
         elif 'hipchat' in obj.keys():
-            hipchat = i['hipchat']['S']
+            hipchat = obj['hipchat']['S']
             logger.debug("HipChat is not supported yet. Ignoring this entry...")
     sema.release()
 
