@@ -47,7 +47,7 @@ def get_user(schedule_id):
         logger.debug("ABORT: Not a valid schedule: {}".format(schedule_id))
         return False
     try:
-        # TODO: This doesn't work with multiple overrides
+        # TODO: This doesn't work with multiple overrides for the same minute
         username = override.json()['overrides'][0]['user']['summary'] + " (Override)"
         logger.debug("Currently on call: {}".format(username))
     except IndexError:
@@ -111,13 +111,40 @@ def update_slack_topic(channel, proposed_update):
         logger.debug("Not updating slack, topic is the same")
         return None
 
+def figure_out_schedule(s):
+    # Purpose here is to find the schedule id if given a human readable name
+    # fingers crossed that this regex holds for awhile. "PXXXXXX"
+    if re.match('^P[a-zA-Z1-9]{6}', s):
+        return s
+    global PD_API_KEY
+    headers = {
+            'Accept': 'application/vnd.pagerduty+json;version=2',
+            'Authorization': 'Token token={token}'.format(token=PD_API_KEY)
+            }
+    url = 'https://api.pagerduty.com/schedules/'
+    payload = {}
+    payload['query'] = s
+    # If there is no override, then check the schedule directly
+    r = requests.get(url, headers=headers, params=payload)
+    try:
+        # This is fragile. fuzzy search may not do what you want
+        sid = r.json()['schedules'][0]['id']
+    except IndexError:
+        logger.debug("Schedule Not Found for: {}".format(s))
+        sid = None
+    return sid
+
 def do_work(obj):
     # entrypoint of the thread
     sema.acquire()
     logger.debug("Operating on {}".format(obj))
     # schedule will ALWAYS be there, it is a ddb primarykey
-    schedule = obj['schedule']['S']
-    username = get_user(schedule)
+    schedule = figure_out_schedule(obj['schedule']['S'])
+    if schedule:
+        username = get_user(schedule)
+    else:
+        logger.debug("Exiting: Schedule not found or not valid, see previous errors")
+        return 127
     if username:
         topic = "{} is on-call for {}".format(username, get_pd_schedule_name(schedule))
         if 'slack' in obj.keys():
