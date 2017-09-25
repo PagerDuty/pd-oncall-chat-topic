@@ -171,10 +171,10 @@ def handler(event, context):
                 )
     threads = []
     for i in response['Items']:
-        t = threading.Thread(target=do_work, args=(i,))
-        threads.append(t)
-        t.start()
-        t.join()
+        thread = threading.Thread(target=do_work, args=(i,))
+        threads.append(thread)
+    [t.start() for t in threads]
+    [t.join() for t in threads]
 
 if __name__ == '__main__':
     get_user('P31BKVS')
