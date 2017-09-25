@@ -23,3 +23,8 @@ deploy:
 		"SlackSSMKeyName"=$(STACKNAME_BASE)-slack \
 		--capabilities CAPABILITY_IAM || exit 0
 
+discover:
+	aws cloudformation --region $(REGION) \
+		describe-stacks \
+		--stack-name $(STACKNAME_BASE) \
+		--query 'Stacks[0].Outputs'

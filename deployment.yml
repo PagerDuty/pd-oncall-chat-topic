@@ -16,6 +16,14 @@ Parameters:
   md5:
     Type: String
 
+Outputs:
+  ConfigTableName:
+    Description: "Name of Config Table"
+    Value: !Ref ConfigTable
+  ConfigTableArn:
+    Description: "Arn of Config Table"
+    Value: !GetAtt ConfigTable.Arn
+
 Resources:
   ChatTopicRole:
     Type: AWS::IAM::Role
