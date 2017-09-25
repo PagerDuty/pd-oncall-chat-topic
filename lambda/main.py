@@ -112,7 +112,11 @@ def update_slack_topic(channel, proposed_update):
         second_part = "." # if there is no topic, just add something
 
     if proposed_update != first_part:
-        payload['topic'] = "{} | {}".format(proposed_update, second_part)
+        # slack limits topic to 250 chars
+        topic =  "{} | {}".format(proposed_update, second_part)
+        if len(topic) > 251:
+            topic = topic[0:247] + "..."
+        payload['topic'] = topic
         r = requests.post('https://slack.com/api/channels.setTopic', data=payload)
         return r.json()
     else:
@@ -153,7 +157,7 @@ def do_work(obj):
     else:
         logger.critical("Exiting: Schedule not found or not valid, see previous errors")
         return 127
-    if username:
+    if username: # is not None, then it is valid and update the chat topic
         topic = "{} is on-call for {}".format(username, get_pd_schedule_name(schedule))
         if 'slack' in obj.keys():
             slack = obj['slack']['S']
