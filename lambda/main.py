@@ -80,9 +80,12 @@ def get_slack_topic(channel):
         WithDecryption=True)['Parameters'][0]['Value']
     payload['channel'] = channel
     r = requests.post('https://slack.com/api/channels.info', data=payload)
-    current = r.json()['channel']['topic']['value']
-    logger.debug("Current Topic: '{}'".format(current))
-    return current
+    try:
+        current = r.json()['channel']['topic']['value']
+        logger.debug("Current Topic: '{}'".format(current))
+        return current
+    except KeyError: # there is no topic
+        return None
 
 def update_slack_topic(channel, proposed_update):
     logger.debug("Entered update_slack_topic() with: {} {}".format(
@@ -95,14 +98,18 @@ def update_slack_topic(channel, proposed_update):
         WithDecryption=True)['Parameters'][0]['Value']
     payload['channel'] = channel
 
-    # This is tricky to get correct
+    # This is tricky to get correct for all the edge cases
     current_full_topic = get_slack_topic(channel)
-    try:
-        first_part = current_full_topic.split('|')[0].strip()
-        second_part = current_full_topic.split('|')[1].strip()
-    except IndexError: # if there is no '|' in the topic
+    if current_full_topic: # is not None
+        try:
+            first_part = current_full_topic.split('|')[0].strip()
+            second_part = current_full_topic.split('|')[1].strip()
+        except IndexError: # if there is no '|' in the topic
+            first_part = "none"
+            second_part = current_full_topic
+    else:
         first_part = "none"
-        second_part = current_full_topic
+        second_part = "." # if there is no topic, just add something
 
     if proposed_update != first_part:
         payload['topic'] = "{} | {}".format(proposed_update, second_part)
