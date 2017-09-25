@@ -61,14 +61,22 @@ Resources:
             - !GetAtt ConfigTable.Arn
 
   ConfigTable:
-    Type: AWS::Serverless::SimpleTable
+    Type: "AWS::DynamoDB::Table"
     Properties:
-      PrimaryKey:
-        Name: schedule
-        Type: String
+      AttributeDefinitions:
+        -
+          AttributeName: "schedule"
+          AttributeType: "S"
+      KeySchema:
+        -
+          AttributeName: "schedule"
+          KeyType: "HASH"
       ProvisionedThroughput:
         ReadCapacityUnits: 1
         WriteCapacityUnits: 1
+      TimeToLiveSpecification:
+        AttributeName: expiretime
+        Enabled: true
 
   ChatTopicFunction:
     Type: AWS::Serverless::Function
