@@ -4,6 +4,7 @@ import os
 from datetime import datetime, timezone, timedelta
 import threading
 import logging
+import re
 
 from botocore.vendored import requests
 import boto3
@@ -44,16 +45,15 @@ def get_user(schedule_id):
     # If there is no override, then check the schedule directly
     override = requests.get(override_schedule_url, headers=headers, params=payload)
     if override.status_code == 404:
-        logger.debug("ABORT: Not a valid schedule: {}".format(schedule_id))
+        logger.critical("ABORT: Not a valid schedule: {}".format(schedule_id))
         return False
     try:
         # TODO: This doesn't work with multiple overrides for the same minute
         username = override.json()['overrides'][0]['user']['summary'] + " (Override)"
-        logger.debug("Currently on call: {}".format(username))
     except IndexError:
         normal = requests.get(normal_schedule_url, headers=headers, params=payload)
         username = normal.json()['users'][0]['name']
-        logger.debug("Currently on call: {}".format(username))
+    logger.info("Currently on call: {}".format(username))
     return username
 
 def get_pd_schedule_name(schedule_id):
@@ -80,8 +80,9 @@ def get_slack_topic(channel):
         WithDecryption=True)['Parameters'][0]['Value']
     payload['channel'] = channel
     r = requests.post('https://slack.com/api/channels.info', data=payload)
-    logger.debug(r.json())
-    return r.json()['channel']['topic']['value']
+    current = r.json()['channel']['topic']['value']
+    logger.debug("Current Topic: '{}'".format(current))
+    return current
 
 def update_slack_topic(channel, proposed_update):
     logger.debug("Entered update_slack_topic() with: {} {}".format(
@@ -108,7 +109,7 @@ def update_slack_topic(channel, proposed_update):
         r = requests.post('https://slack.com/api/channels.setTopic', data=payload)
         return r.json()
     else:
-        logger.debug("Not updating slack, topic is the same")
+        logger.info("Not updating slack, topic is the same")
         return None
 
 def figure_out_schedule(s):
@@ -143,7 +144,7 @@ def do_work(obj):
     if schedule:
         username = get_user(schedule)
     else:
-        logger.debug("Exiting: Schedule not found or not valid, see previous errors")
+        logger.critical("Exiting: Schedule not found or not valid, see previous errors")
         return 127
     if username:
         topic = "{} is on-call for {}".format(username, get_pd_schedule_name(schedule))
@@ -152,7 +153,7 @@ def do_work(obj):
             update_slack_topic(slack, topic)
         elif 'hipchat' in obj.keys():
             hipchat = obj['hipchat']['S']
-            logger.debug("HipChat is not supported yet. Ignoring this entry...")
+            logger.critical("HipChat is not supported yet. Ignoring this entry...")
     sema.release()
 
 def handler(event, context):
