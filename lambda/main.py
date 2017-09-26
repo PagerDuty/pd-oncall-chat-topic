@@ -105,8 +105,8 @@ def update_slack_topic(channel, proposed_update):
     current_full_topic = get_slack_topic(channel)
     if current_full_topic: # is not None
         try:
-            first_part = current_full_topic.split('|')[0].strip()
-            second_part = current_full_topic.split('|')[1].strip()
+            first_part = current_full_topic.rsplit('|', 1)[0].strip()
+            second_part = current_full_topic.rsplit('|', 1)[1].strip()
         except IndexError: # if there is no '|' in the topic
             first_part = "none"
             second_part = current_full_topic
@@ -161,7 +161,7 @@ def do_work(obj):
         logger.critical("Exiting: Schedule not found or not valid, see previous errors")
         return 127
     if username: # is not None, then it is valid and update the chat topic
-        topic = "{} is on-call for {}".format(username, get_pd_schedule_name(schedule))
+        topic = "{} is on-call for '{}'".format(username, get_pd_schedule_name(schedule))
         if 'slack' in obj.keys():
             slack = obj['slack']['S']
             update_slack_topic(slack, topic)
