@@ -47,12 +47,15 @@ def get_user(schedule_id):
     if override.status_code == 404:
         logger.critical("ABORT: Not a valid schedule: {}".format(schedule_id))
         return False
-    try:
+    if override.json().get('overrides'): # is not []
         # TODO: This doesn't work with multiple overrides for the same minute
         username = override.json()['overrides'][0]['user']['summary'] + " (Override)"
-    except IndexError:
+    else:
         normal = requests.get(normal_schedule_url, headers=headers, params=payload)
-        username = normal.json()['users'][0]['name']
+        try:
+            username = normal.json()['users'][0]['name']
+        except IndexError:
+            username = "No One :thisisfine:"
     logger.info("Currently on call: {}".format(username))
     return username
 
