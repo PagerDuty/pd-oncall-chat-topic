@@ -26,7 +26,12 @@ CloudFormation template.
 
 < insert picture here >
 
-## Future work
+## Cost
+The way that this Lambda Function is configured, is to run on a schedule every 5
+minutes. Some basic (anecdotal) testing revealed that the execution is about 5
+seconds per 5 updates (via threading). Assuming double that and erroring on the
+side of a large configuration (10x) the execution time will cost below $2/month.
+The DDB table will cost, ~$0.60/month.
 
 
 ## Contact
