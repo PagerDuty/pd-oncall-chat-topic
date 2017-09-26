@@ -129,7 +129,7 @@ def update_slack_topic(channel, proposed_update):
 def figure_out_schedule(s):
     # Purpose here is to find the schedule id if given a human readable name
     # fingers crossed that this regex holds for awhile. "PXXXXXX"
-    if re.match('^P[a-zA-Z1-9]{6}', s):
+    if re.match('^P[a-zA-Z0-9]{6}', s):
         return s
     global PD_API_KEY
     headers = {
