@@ -188,8 +188,6 @@ def handler(event, context):
     for i in response['Items']:
         thread = threading.Thread(target=do_work, args=(i,))
         threads.append(thread)
+    # Start threads and wait for all to finish
     [t.start() for t in threads]
     [t.join() for t in threads]
-
-if __name__ == '__main__':
-    get_user('P31BKVS')
