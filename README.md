@@ -18,13 +18,39 @@ This project started at one of our Hack Days, a day put aside monthly for
 employees to build and present projects or ideas that fulfill some kind of need
 at the company.
 
+## How to Deploy
+1. Create a Slack App and obtain a API key. https://api.slack.com/apps
+2. Obtain a PagerDuty API Key (v2) [Directions Here](https://support.pagerduty.com/docs/using-the-api#section-generating-an-api-key)
+3. Deploy CloudFormation
+  - Clone repo
+  - Modify 2 variables for your AWS Environment
+    ([Makefile#L1-L2](https://github.com/PagerDuty/pd-oncall-chat-topic/blob/master/Makefile#L1-L2))
+  - `make deploy`
+4. Write API Keys to EC2 SSM Parameter Store.
+  - The lambda function expects certain key names by default so the following
+    commands should work unless modified elsewhere (advanced config).
+  - `make put-pd-key`
+  - `make put-slack-key`
+5. Write Config to DynomoDB for which channels to update.
+  - It is possible to use the AWS CLI for this (or finish #4 for ease of use.
+  - In lieu of above, manually update the table with item entries of this format:
+  ```
+  {
+    "schedule": "P123456",
+    "slack": "C123456"
+  }
+  ```
+  (where `schedule` is the PagerDuty Schedule ID, and `slack` is the Slack
+  Channel ID)
+
 ## Architecture
 The main part of this infrastructure is an AWS Lambda Function that operates on
 a schedule (cron), reads configuration information from an DynomoDB Table and
 secrets from AWS EC2 Parameter Store. This is all deployed from a AWS
 CloudFormation template.
 
-< insert picture here >
+![Architecture
+Diagram](https://raw.githubusercontent.com/PagerDuty/pd-oncall-chat-topic/master/diagram.png)
 
 ## Cost
 The way that this Lambda Function is configured, is to run on a schedule every 5
