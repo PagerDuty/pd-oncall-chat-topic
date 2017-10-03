@@ -1,7 +1,7 @@
 STACKNAME_BASE=pd-oncall-chat-topic
 REGION="ca-central-1"
+BUCKET=$(STACKNAME_BASE) # Bucket in REGION that is used for deployment (`pd-oncall-chat-topic` is already used)
 SSMKeyArn=$(shell aws kms --region $(REGION) describe-key --key-id alias/aws/ssm --query KeyMetadata.Arn)
-BUCKET=$(STACKNAME_BASE)
 MD5=$(shell md5sum lambda/*.py | md5sum | cut -d ' ' -f 1)
 
 
