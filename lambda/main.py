@@ -43,10 +43,11 @@ def get_user(schedule_id):
     )
     # This value should be less than the running interval
     # It is best to use UTC for the datetime object
-    t = datetime.now(timezone.utc) - timedelta(minutes=1)
+    now = datetime.now(timezone.utc)
+    since = now - timedelta(minutes=1)
     payload = {}
-    payload['since'] = t.isoformat()
-    payload['until'] = datetime.now(timezone.utc).isoformat()
+    payload['since'] = since.isoformat()
+    payload['until'] = now.isoformat()
     # If there is no override, then check the schedule directly
     override = requests.get(
             override_schedule_url,
