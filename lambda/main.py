@@ -133,7 +133,7 @@ def update_slack_topic(channel, proposed_update):
     if proposed_update != first_part:
         # slack limits topic to 250 chars
         topic = "{} | {}".format(proposed_update, second_part)
-        if len(topic) > 251:
+        if len(topic) > 250:
             topic = topic[0:247] + "..."
         payload['topic'] = topic
         r = requests.post('https://slack.com/api/channels.setTopic', data=payload)
