@@ -129,7 +129,7 @@ def update_slack_topic(channel, proposed_update):
     if c_delimit_count < 1:
         c_delimit_count = 1
 
-    if current_full_topic:  # is not None
+    if current_full_topic is not None:
         try:
             first_part = current_full_topic.rsplit(
                     '|', c_delimit_count)[0].strip()
@@ -195,7 +195,7 @@ def do_work(obj):
             "Exiting: Schedule not found or not valid, see previous errors"
         )
         return 127
-    if username:  # is not None, then it is valid and update the chat topic
+    if username is not None:  # then it is valid and update the chat topic
         topic = "{} is on-call for '{}'".format(
                 username,
                 get_pd_schedule_name(schedule)
