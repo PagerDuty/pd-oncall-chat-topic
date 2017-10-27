@@ -189,7 +189,9 @@ def do_work(obj):
         )
         if 'slack' in obj.keys():
             slack = obj['slack']['S']
-            update_slack_topic(slack, topic)
+            # 'slack' may contain multiple channels seperated by whitespace
+            for channel in slack.split():
+                update_slack_topic(channel, topic)
         elif 'hipchat' in obj.keys():
             # hipchat = obj['hipchat']['S']
             logger.critical("HipChat is not supported yet. Ignoring this entry...")
