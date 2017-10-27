@@ -178,10 +178,14 @@ def do_work(obj):
     else:
         logger.critical("Exiting: Schedule not found or not valid, see previous errors")
         return 127
+    try:
+        sched_name = obj['sched_name']['S']
+    except:
+        sched_name = get_pd_schedule_name(schedule)
     if username is not None:  # then it is valid and update the chat topic
-        topic = "{} is on-call for '{}'".format(
+        topic = "{} is on-call for {}".format(
             username,
-            get_pd_schedule_name(schedule)
+            sched_name
         )
         if 'slack' in obj.keys():
             slack = obj['slack']['S']
