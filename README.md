@@ -19,7 +19,7 @@ employees to build and present projects or ideas that fulfill some kind of need
 at the company.
 
 ## How to Deploy
-1. Create a Slack App and obtain a API key. https://api.slack.com/apps
+1. Create an Integrated Bot that you can invite to your channel. https://my.slack.com/services/new/bot
 2. Obtain a PagerDuty API Key (v2) [Directions Here](https://support.pagerduty.com/docs/using-the-api#section-generating-an-api-key)
 3. Deploy CloudFormation
   - Clone repo
