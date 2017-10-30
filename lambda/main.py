@@ -92,9 +92,11 @@ def get_slack_topic(channel):
     try:
         current = r.json()['channel']['topic']['value']
         logger.debug("Current Topic: '{}'".format(current))
-        return current
-    except KeyError:  # there is no topic
-        return None
+    except KeyError:  # the channel is private
+        r = requests.post('https://slack.com/api/groups.info', data=payload)
+        current = r.json()['group']['topic']['value']
+        logger.debug("Current Topic: '{}'".format(current))
+    return current
 
 
 def update_slack_topic(channel, proposed_update):
@@ -137,7 +139,9 @@ def update_slack_topic(channel, proposed_update):
             topic = topic[0:247] + "..."
         payload['topic'] = topic
         r = requests.post('https://slack.com/api/channels.setTopic', data=payload)
-        return r.json()
+        if r.json()['error'] == "channel_not_found":
+            r = requests.post('https://slack.com/api/groups.setTopic', data=payload)
+        logger.debug(r.json())
     else:
         logger.info("Not updating slack, topic is the same")
         return None
