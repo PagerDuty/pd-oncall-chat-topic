@@ -111,15 +111,15 @@ def update_slack_topic(channel, proposed_update):
     # This is tricky to get correct for all the edge cases
     current_full_topic = get_slack_topic(channel)
 
-    # This should match every case EXCEPT when onboarding a channel and it
-    # already has a '|' in it. Workaround: Fix topic again and it will be
-    # correct in the future
-    current_full_topic_delimit_count = current_full_topic.count('|')
-    c_delimit_count = current_full_topic_delimit_count - 1
-    if c_delimit_count < 1:
-        c_delimit_count = 1
+    if current_full_topic:
+        # This should match every case EXCEPT when onboarding a channel and it
+        # already has a '|' in it. Workaround: Fix topic again and it will be
+        # correct in the future
+        current_full_topic_delimit_count = current_full_topic.count('|')
+        c_delimit_count = current_full_topic_delimit_count - 1
+        if c_delimit_count < 1:
+            c_delimit_count = 1
 
-    if current_full_topic is not None:
         try:
             first_part = current_full_topic.rsplit('|', c_delimit_count)[0].strip()
             second_part = current_full_topic.replace(first_part + " |", "").strip()
