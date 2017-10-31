@@ -139,7 +139,7 @@ def update_slack_topic(channel, proposed_update):
             topic = topic[0:247] + "..."
         payload['topic'] = topic
         r = requests.post('https://slack.com/api/channels.setTopic', data=payload)
-        if r.json()['error'] == "channel_not_found":
+        if r.json().get('error') == "channel_not_found":  # private channel
             r = requests.post('https://slack.com/api/groups.setTopic', data=payload)
         logger.debug(r.json())
     else:
