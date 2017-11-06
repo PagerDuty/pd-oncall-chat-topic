@@ -115,6 +115,9 @@ def update_slack_topic(channel, proposed_update):
     # then replace the rest of the string with the address
     current_full_topic = re.sub(r'<mailto:([a-zA-Z@.]*)(?:[|a-zA-Z@.]*)>',
             r'\1', get_slack_topic(channel))
+    # Also handle Slack "Subteams" in the same way as above
+    current_full_topic = re.sub(r'<(?:!subteam\^[A-Z0-9|]*)([@A-Za-z-]*)>', r'\1',
+            current_full_topic)
 
     if current_full_topic:
         # This should match every case EXCEPT when onboarding a channel and it
