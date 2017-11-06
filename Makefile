@@ -1,4 +1,4 @@
-STACKNAME_BASE=pd-oncall-chat-topic
+STACKNAME_BASE=pagerduty-oncall-chat-topic
 REGION="ca-central-1"
 # Bucket in REGION that is used for deployment (`pd-oncall-chat-topic` is already used)
 BUCKET=$(STACKNAME_BASE)

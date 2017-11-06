@@ -54,8 +54,7 @@ def get_user(schedule_id):
         logger.critical("ABORT: Not a valid schedule: {}".format(schedule_id))
         return False
     if override.json().get('overrides'):  # is not []
-        # TODO: This doesn't work with multiple overrides for the same minute
-        username = override.json()['overrides'][0]['user']['summary'] + " (Override)"
+        username = override.json()['overrides'][-1]['user']['summary'] + " (Override)"
     else:
         normal = requests.get(normal_schedule_url, headers=headers, params=payload)
         try:
