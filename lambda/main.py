@@ -110,7 +110,11 @@ def update_slack_topic(channel, proposed_update):
     payload['channel'] = channel
 
     # This is tricky to get correct for all the edge cases
-    current_full_topic = get_slack_topic(channel)
+    # Because Slack adds a '<mailto:foo@example.com|foo@example.com>' behind the
+    # scenes, we need to match the email address in the first capturing group,
+    # then replace the rest of the string with the address
+    current_full_topic = re.sub(r'<mailto:([a-zA-Z@.]*)(?:[|a-zA-Z@.]*)>',
+            r'\1', get_slack_topic(channel))
 
     if current_full_topic:
         # This should match every case EXCEPT when onboarding a channel and it
