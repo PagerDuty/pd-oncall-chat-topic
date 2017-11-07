@@ -31,36 +31,36 @@ def get_user(schedule_id):
         'Accept': 'application/vnd.pagerduty+json;version=2',
         'Authorization': 'Token token={token}'.format(token=PD_API_KEY)
     }
-    normal_schedule_url = 'https://api.pagerduty.com/schedules/{0}/users'.format(
+    normal_url = 'https://api.pagerduty.com/schedules/{0}/users'.format(
         schedule_id
     )
-    override_schedule_url = 'https://api.pagerduty.com/schedules/{0}/overrides'.format(
+    override_url = 'https://api.pagerduty.com/schedules/{0}/overrides'.format(
         schedule_id
     )
     # This value should be less than the running interval
     # It is best to use UTC for the datetime object
     now = datetime.now(timezone.utc)
-    since = now - timedelta(minutes=1)
+    since = now - timedelta(minutes=1)  # One minute ago
     payload = {}
     payload['since'] = since.isoformat()
     payload['until'] = now.isoformat()
-    # If there is no override, then check the schedule directly
-    override = requests.get(
-        override_schedule_url,
-        headers=headers,
-        params=payload
-    )
-    if override.status_code == 404:
+    normal = requests.get(normal_url, headers=headers, params=payload)
+    if normal.status_code == 404:
         logger.critical("ABORT: Not a valid schedule: {}".format(schedule_id))
         return False
-    if override.json().get('overrides'):  # is not []
-        username = override.json()['overrides'][-1]['user']['summary'] + " (Override)"
-    else:
-        normal = requests.get(normal_schedule_url, headers=headers, params=payload)
-        try:
-            username = normal.json()['users'][0]['name']
-        except IndexError:
-            username = "No One :thisisfine:"
+    try:
+        username = normal.json()['users'][0]['name']
+        # Check for overrides
+        # If there is *any* override, then the above username is an override
+        # over the normal schedule. The problem must be approached this way
+        # because the /overrides endpoint does not guarentee an order of the
+        # output.
+        override = requests.get(override_url, headers=headers, params=payload)
+        if override.json()['overrides']:  # is not empty list
+            username = username + " (Override)"
+    except IndexError:
+        username = "No One :thisisfine:"
+
     logger.info("Currently on call: {}".format(username))
     return username
 
