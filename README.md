@@ -1,6 +1,9 @@
 # pd-oncall-chat-topic
 AWS Lambda Function that updates a Chat Room topic (eg, Slack)
 
+![Screenshot](https://raw.githubusercontent.com/PagerDuty/pd-oncall-chat-topic/master/screenshot.png)
+
+
 ## Motivation
 At [PagerDuty](https://www.pagerduty.com/), we
 [use](https://www.pagerduty.com/blog/how-does-pagerduty-use-pagerduty/)
@@ -53,8 +56,7 @@ a schedule (cron), reads configuration information from an DynomoDB Table and
 secrets from AWS EC2 Parameter Store. This is all deployed from a AWS
 CloudFormation template.
 
-![Architecture
-Diagram](https://raw.githubusercontent.com/PagerDuty/pd-oncall-chat-topic/master/diagram.png)
+![Architecture Diagram](https://raw.githubusercontent.com/PagerDuty/pd-oncall-chat-topic/master/diagram.png)
 
 ## Cost
 The way that this Lambda Function is configured, is to run on a schedule every 5
