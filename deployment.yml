@@ -11,6 +11,15 @@ Parameters:
   SlackSSMKeyName:
     Type: String
     Default: "pd-oncall-chat-topic-slack"
+  SlackVerificationTokenName:
+    Type: String
+    Default: "pd-oncall-chat-topic-slack-verification"
+  SlackOAuthAccessTokenName:
+    Type: String
+    Default: "pd-oncall-chat-topic-slack-access"
+  SlackBotOAuthAccessTokenName:
+    Type: String
+    Default: "pd-oncall-chat-topic-slack-bot-access"
   Bucket:
     Type: String
   md5:
@@ -51,6 +60,9 @@ Resources:
             Resource:
             - !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${PDSSMKeyName}"
             - !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${SlackSSMKeyName}"
+            - !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${SlackVerificationTokenName}"
+            - !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${SlackOAuthAccessTokenName}"
+            - !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${SlackBotOAuthAccessTokenName}"
       - PolicyName: KMS
         PolicyDocument:
           Statement:
@@ -106,3 +118,27 @@ Resources:
           Type: Schedule
           Properties:
               Schedule: 'rate(5 minutes)'
+  OncallDerefFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: mention.handler
+      Runtime: python3.6
+      Timeout: 120
+      CodeUri:
+        Bucket: !Ref Bucket
+        Key: !Ref md5
+      Environment:
+        Variables:
+          PD_API_KEY_NAME: !Ref PDSSMKeyName
+          SLACK_API_KEY_NAME: !Ref SlackSSMKeyName
+          SLACK_VERIFICATION_TOKEN_NAME: !Ref SlackVerificationTokenName
+          SLACK_OAUTH_ACCESS_TOKEN_NAME: !Ref SlackOAuthAccessTokenName
+          SLACK_BOT_OAUTH_ACCESS_TOKEN_NAME: !Ref SlackBotOAuthAccessTokenName
+          CONFIG_TABLE: !Ref ConfigTable
+      Role: !GetAtt ChatTopicRole.Arn
+      Events:
+        PostApi:
+          Type: Api
+          Properties:
+            Path: /
+            Method: POST

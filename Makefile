@@ -34,3 +34,9 @@ put-pd-key:
 	./scripts/put-ssm.sh $(STACKNAME_BASE) $(STACKNAME_BASE) $(REGION)
 put-slack-key:
 	./scripts/put-ssm.sh $(STACKNAME_BASE)-slack $(STACKNAME_BASE) $(REGION)
+put-slack-verification:
+	./scripts/put-ssm.sh $(STACKNAME_BASE)-slack-verification $(STACKNAME_BASE) $(REGION)
+put-slack-oauth-access:
+	./scripts/put-ssm.sh $(STACKNAME_BASE)-slack-access $(STACKNAME_BASE) $(REGION)
+put-slack-bot-access:
+	./scripts/put-ssm.sh $(STACKNAME_BASE)-slack-bot-access $(STACKNAME_BASE) $(REGION)
