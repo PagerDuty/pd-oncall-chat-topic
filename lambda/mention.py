@@ -39,9 +39,10 @@ def read_table():
     channel_to_schedule = {}
     for obj in response['Items']:
         schedule_id = obj['schedule']['S']
+        service_id = obj['service']['S']
         slack = obj['slack']['S']
         for channel in slack.split(' '):
-            channel_to_schedule[channel] = schedule_id
+            channel_to_schedule[channel] = { 'schedule': schedule_id, 'service': service_id }
 
     print(channel_to_schedule)
     return channel_to_schedule
@@ -88,6 +89,59 @@ def get_oncall_user(schedule_id):
     logger.info("Currently on call: {}".format(username))
     return (username, email)
 
+def make_pd_api_request(endpoint, payload):
+    global PD_API_KEY
+    headers = {
+        'Accept': 'application/vnd.pagerduty+json;version=2',
+        'Authorization': 'Token token={token}'.format(token=PD_API_KEY)
+    }
+
+    url = 'https://api.pagerduty.com/{}'.format(
+        endpoint
+    )
+
+    return requests.get(url, headers=headers, params=payload)
+
+def get_escalation_policy(schedule_id):
+    schedule_endpoint = 'schedules/{}'.format(
+        schedule_id
+    )
+    payload = {}
+
+    escalation_policy = make_pd_api_request(schedule_endpoint, payload)
+    if escalation_policy.status_code != 200:
+        return False
+    try:
+        escalation_policy_id = escalation_policy.json()['escalation_policies'][0]['id']
+    except IndexError:
+        escalation_policy_id = ""
+
+    return escalation_policy_id
+
+def create_incident(schedule, service, email, message):
+    escalation_policy = get_escalation_policy(schedule)
+
+    if escalation_policy:
+        endpoint = 'incidents'
+        payload = {}
+
+        payload['from'] = email
+        payload['escalation_policy'] = {'id': escalation_policy, 'type': 'escalation_policy_reference'}
+        payload['service'] = {'id': service, 'type': 'service_reference'}
+        payload['title'] = 'Slack oncall request'
+        payload['body'] = {'type': 'incident_body', 'details': message}
+
+        incident_body = make_pd_api_request(endpoint, payload)
+
+        if incident.status_code != 200:
+            return False
+        try:
+            incident_url = incident_body.json()['incident']['html_url']
+        except IndexError:
+            incident_url = False
+
+    return incident_url
+
 def get_slack_user(email_address):
     userinfo_url = 'https://slack.com/api/users.lookupByEmail'
     headers = {'Authorization': 'Bearer ' + BOT_OAUTH_ACCESS_TOKEN}
@@ -109,10 +163,10 @@ def get_slack_user(email_address):
     except IndexError:
         return False
 
-def build_response(table, channel):
+def build_response(table, channel, message):
     if channel not in table:
         return "Sorry, I don't have an on-call schedule set for this channel"
-    schedule = table[channel]
+    schedule = table[channel][schedule]
     # this is currently a no-op with the data we have
     schedule = figure_out_schedule(schedule)
     if not schedule:
@@ -123,6 +177,10 @@ def build_response(table, channel):
     slack_user = get_slack_user(email)
     if not slack_user:
         return f"{username} is on call, but I couldn't find their slack username from their email"
+    service = table[channel][service]
+    incident = create_incident(schedule, email, message)
+    if service and incident:
+        return f"{username} is on call with slack id <@{slack_user}>. View request here: {incident}"
     return f"{username} is on call with slack id <@{slack_user}>"
 
 
@@ -146,12 +204,11 @@ def handler(event, context):
         print(body['event'])
         channel = body['event']['channel']
         ts = body['event']['ts']
-        response = build_response(table, channel)
+        message = body['text']
+        response = build_response(table, channel, message)
         requests.post('https://slack.com/api/chat.postMessage',
                       headers={'Authorization': 'Bearer ' + BOT_OAUTH_ACCESS_TOKEN},
                       json={'channel': channel, 'thread_ts': ts, 'text': response})
         return respond(None, {})
     else:
         raise Exception('unknown body type!')
-
-
