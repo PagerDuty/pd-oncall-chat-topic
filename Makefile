@@ -7,6 +7,9 @@ MD5=$(shell md5sum lambda/*.py | md5sum | cut -d ' ' -f 1)
 
 
 deploy:
+# Create bucket.  Will continue on error.  If we own it, s3 cp will work. If it's already claimed, make will error and quit
+	-aws s3 mb \
+	  s3://$(STACKNAME_BASE)
 	cd lambda && \
 		zip -r9 /tmp/deployment.zip *.py && \
 		aws s3 cp --region $(REGION) /tmp/deployment.zip \
