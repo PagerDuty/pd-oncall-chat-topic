@@ -35,20 +35,9 @@ at the company.
   - `make put-pd-key`
   - `make put-slack-key`
 5. Write Config to DynomoDB for which channels to update.
-  - It is possible to use the AWS CLI for this (or finish
-    [#4](https://github.com/PagerDuty/pd-oncall-chat-topic/issues/4) for ease of
-    use)
-  - In lieu of above, manually update the table with item entries of this format:
-  ```
-  {
-    "schedule": "P123456",
-    "slack": "C123456",
-    "sched_name": "Optional schedule name to use in topic"
-  }
-  ```
-  (where `schedule` is the PagerDuty Schedule ID, and `slack` is the Slack
-  Channel ID. You can have a space-separated list of channels. `sched_name` is
-  optional and if omitted will be looked up)
+  - This command will ask for the PagerDuty schedule ID and Slack channel ID
+  - `make put-config`
+
 
 ## Architecture
 The main part of this infrastructure is an AWS Lambda Function that operates on
