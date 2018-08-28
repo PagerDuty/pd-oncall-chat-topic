@@ -123,6 +123,12 @@ def update_slack_topic(channel, proposed_update):
     # Also handle Slack Channels in the same way as above
     current_full_topic = re.sub(r'<(?:#[A-Z0-9|]*)([@A-Za-z-]*)>', r'#\1',
             current_full_topic)
+    # Also handle phone numbers in the same way as above
+    current_full_topic = re.sub(r'<tel:(\d{3}-\d{3}-\d{4})\|(\d{3}-\d{3}-\d{4}>)',
+            r'\1', get_slack_topic(channel))
+    # Also handle URLs in the same way as above
+    current_full_topic = re.sub(r'<(https?:\/\/(?:www\.|(?!www))[a-zA-Z0-9][a-zA-Z0-9-]+[a-zA-Z0-9]\.[^\s]{2,}|www\.[a-zA-Z0-9][a-zA-Z0-9-]+[a-zA-Z0-9]\.[^\s]{2,}|https?:\/\/(?:www\.|(?!www))[a-zA-Z0-9]\.[^\s]{2,}|www\.[a-zA-Z0-9]\.[^\s]{2,})>',
+            r'\1', current_full_topic)
 
     if current_full_topic:
         # This should match every case EXCEPT when onboarding a channel and it
