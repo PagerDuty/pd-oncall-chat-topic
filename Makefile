@@ -34,3 +34,5 @@ put-pd-key:
 	./scripts/put-ssm.sh $(STACKNAME_BASE) $(STACKNAME_BASE) $(REGION)
 put-slack-key:
 	./scripts/put-ssm.sh $(STACKNAME_BASE)-slack $(STACKNAME_BASE) $(REGION)
+put-config:
+	./scripts/put-config.sh
