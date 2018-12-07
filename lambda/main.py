@@ -152,9 +152,7 @@ def update_slack_topic(channel, proposed_update):
         if len(topic) > 250:
             topic = topic[0:247] + "..."
         payload['topic'] = topic
-        r = requests.post('https://slack.com/api/channels.setTopic', data=payload)
-        if r.json().get('error') == "channel_not_found":  # private channel
-            r = requests.post('https://slack.com/api/groups.setTopic', data=payload)
+        r = requests.post('https://slack.com/api/conversations.setTopic', data=payload)
         logger.debug(r.json())
     else:
         logger.info("Not updating slack, topic is the same")
