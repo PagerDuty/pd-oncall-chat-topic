@@ -87,14 +87,9 @@ def get_slack_topic(channel):
         Names=[os.environ['SLACK_API_KEY_NAME']],
         WithDecryption=True)['Parameters'][0]['Value']
     payload['channel'] = channel
-    r = requests.post('https://slack.com/api/channels.info', data=payload)
-    try:
-        current = r.json()['channel']['topic']['value']
-        logger.debug("Current Topic: '{}'".format(current))
-    except KeyError:  # the channel is private
-        r = requests.post('https://slack.com/api/groups.info', data=payload)
-        current = r.json()['group']['topic']['value']
-        logger.debug("Current Topic: '{}'".format(current))
+    r = requests.post('https://slack.com/api/conversations.info', data=payload)
+    current = r.json()['channel']['topic']['value']
+    logger.debug("Current Topic: '{}'".format(current))
     return current
 
 
