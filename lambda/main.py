@@ -148,7 +148,7 @@ def update_slack_topic(channel, proposed_update):
             topic = topic[0:247] + "..."
         payload['topic'] = topic
         r = requests.post('https://slack.com/api/conversations.setTopic', data=payload)
-        logger.debug(r.json())
+        logger.debug("Response for '{}' was: {}".format(channel, r.json()))
     else:
         logger.info("Not updating slack, topic is the same")
         return None
