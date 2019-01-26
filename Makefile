@@ -23,6 +23,9 @@ deploy:
 		"PDSSMKeyName"=$(STACKNAME_BASE) \
 		"SlackSSMKeyName"=$(STACKNAME_BASE)-slack \
 		--capabilities CAPABILITY_IAM || exit 0
+zip:
+	cd lambda && \
+		zip -r9 /tmp/deployment.zip *.py
 
 discover:
 	aws cloudformation --region $(REGION) \
