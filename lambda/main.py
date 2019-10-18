@@ -147,8 +147,12 @@ def update_slack_topic(channel, proposed_update):
         if len(topic) > 250:
             topic = topic[0:247] + "..."
         payload['topic'] = topic
-        r = requests.post('https://slack.com/api/conversations.setTopic', data=payload)
-        logger.debug("Response for '{}' was: {}".format(channel, r.json()))
+        try:
+            r = requests.post('https://slack.com/api/conversations.setTopic', data=payload)
+            logger.debug("Response for '{}' was: {}".format(channel, r.json()))
+        except KeyError:
+            logger.error("Could not find channel '{}' was the on-call bot removed from this slack channel?".format(channel))
+
     else:
         logger.info("Not updating slack, topic is the same")
         return None
@@ -202,7 +206,10 @@ def do_work(obj):
             slack = obj['slack']['S']
             # 'slack' may contain multiple channels seperated by whitespace
             for channel in slack.split():
-                update_slack_topic(channel, topic)
+                try:
+                    update_slack_topic(channel, topic)
+                except KeyError:
+                    logger.critical("Slack channel '{}' is not found. Is the on-call bot still in this channel?".format(channel))
         elif 'hipchat' in obj.keys():
             # hipchat = obj['hipchat']['S']
             logger.critical("HipChat is not supported yet. Ignoring this entry...")
