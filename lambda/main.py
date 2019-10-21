@@ -92,7 +92,7 @@ def get_slack_topic(channel):
         current = r.json()['channel']['topic']['value']
         logger.debug("Current Topic: '{}'".format(current))
     except KeyError:
-        logger.critical("Could not find '{}' on slack, has the on-call bot been removed from this channel?".format(payload['channel']))
+        logger.critical("Could not find '{}' on slack, has the on-call bot been removed from this channel?".format(channel))
     return current
 
 
