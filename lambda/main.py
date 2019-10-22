@@ -87,9 +87,12 @@ def get_slack_topic(channel):
         Names=[os.environ['SLACK_API_KEY_NAME']],
         WithDecryption=True)['Parameters'][0]['Value']
     payload['channel'] = channel
-    r = requests.post('https://slack.com/api/conversations.info', data=payload)
-    current = r.json()['channel']['topic']['value']
-    logger.debug("Current Topic: '{}'".format(current))
+    try:
+        r = requests.post('https://slack.com/api/conversations.info', data=payload)
+        current = r.json()['channel']['topic']['value']
+        logger.debug("Current Topic: '{}'".format(current))
+    except KeyError:
+        logger.critical("Could not find '{}' on slack, has the on-call bot been removed from this channel?".format(channel))
     return current
 
 
