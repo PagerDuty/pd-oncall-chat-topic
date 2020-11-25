@@ -18,13 +18,25 @@ logging.getLogger('botocore').setLevel(logging.CRITICAL)
 logger = logging.getLogger()
 logger.setLevel(logging.DEBUG)
 
+CHAT_USER_NOT_FOUND_RESULT = {
+    'at_handle': None,
+    'id': None,
+    'email': None,
+    'exists': False,
+    'name': None
+}
+
 # Fetch the PD API token from PD_API_KEY_NAME key in SSM
 PD_API_KEY = boto3.client('ssm').get_parameters(
     Names=[os.environ['PD_API_KEY_NAME']],
     WithDecryption=True)['Parameters'][0]['Value']
 
-# Username to use when no user is found on-call
-NO_USER_NAME = 'No one :thisisfine:'
+PD_USER_NOT_FOUND_RESULT = {
+    'email': None,
+    'exists': False,
+    'is_override': False,
+    'name': 'No one :thisisfine:'
+}
 
 
 # Get the Current User on-call for a given schedule
@@ -53,6 +65,7 @@ def get_pd_user(schedule_id):
         return False
     try:
         user = normal.json()['users'][0]
+        user['exists'] = True
         user['is_override'] = False
         # Check for overrides
         # If there is *any* override, then the above username is an override
@@ -63,12 +76,7 @@ def get_pd_user(schedule_id):
         if override.json()['overrides']:  # is not empty list
             user['is_override'] = True
     except IndexError:
-        user = {
-            'id': None,
-            'email': None,
-            'is_override': False,
-            'name': NO_USER_NAME
-        }
+        user = PD_USER_NOT_FOUND_RESULT
 
     logger.info("Currently on call: {}".format(user['name']))
     return user
@@ -91,9 +99,10 @@ def get_pd_schedule_name(schedule_id):
 
 
 def get_chat_user(chat_provider_name, pd_email, pd_name):
+    chat_user = CHAT_USER_NOT_FOUND_RESULT
     if chat_provider_name == 'slack':
-        return get_slack_user(pd_email, pd_name)
-    return pd_name
+        chat_user = get_slack_user(pd_email, pd_name)
+    return chat_user
 
 
 def get_slack_user(email, name):
@@ -102,14 +111,24 @@ def get_slack_user(email, name):
         Names=[os.environ['SLACK_API_KEY_NAME']],
         WithDecryption=True)['Parameters'][0]['Value']
     payload['email'] = email
+
+    slack_user = {
+        'at_handle': None,
+        'id': None,
+        'email': email,
+        'exists': False,
+        'name': name
+    }
+
     try:
         r = requests.get('https://slack.com/api/users.lookupByEmail', payload)
-        username = r.json()['user']['id']
-        logger.debug("Next Slack username: {}".format(username))
-        return '<@%s>' % username
+        slack_user['id'] = r.json()['user']['id']
+        slack_user['exists'] = True
+        slack_user['at_handle'] = '<@{}>'.format(slack_user['id'])
     except KeyError:
-        logger.critical("Could not Slack username from email {}.".format(email))
-        return name
+        logger.warn("Could not Slack username from email {}.".format(email))
+
+    return slack_user
 
 
 def get_slack_topic(channel):
@@ -244,40 +263,54 @@ def normalize_dynamodb_item(obj):
 
 
 def do_work(obj):
-    config = normalize_dynamodb_item(obj)
-
     # entrypoint of the thread
     sema.acquire()
     logger.debug("Operating on {}".format(obj))
 
-    if config['chat_provider']['supported']:
-        # schedule will ALWAYS be there, it is a ddb primarykey
-        schedule_id = figure_out_schedule(config['pagerduty']['schedule_id'])
-
-        if not schedule_id:
-            logger.critical("Exiting: Schedule not found or not valid, see previous errors")
-            return 127
-
-        pd_user = get_pd_user(schedule_id)
-        pd_schedule_name = config['pagerduty']['schedule_name']
-        if not pd_schedule_name:
-            pd_schedule_name = get_pd_schedule_name(schedule_id)
-
-        if pd_user is not None:  # then it is valid and update the chat topic
-            chat_user = get_chat_user(config['chat_provider']['name'], pd_user['email'], pd_user['name'])
-
-            topic = "{}{} is on-call for {}".format(
-                chat_user,
-                " (override)" if pd_user['is_override'] else "",
-                pd_schedule_name
-            )
-
-            for channel in config['chat_provider']['channels']:
-                update_chat_channel(config['chat_provider']['name'], config['chat_provider']['channels'], topic)
-    else:
-        logger.critical("{} is not supported yet. Ignoring this entry...".format(config['chat_provider']['name']))
+    return do_work_critical(obj)
 
     sema.release()
+
+
+def do_work_critical(obj):
+    config = normalize_dynamodb_item(obj)
+
+    if not config['chat_provider']['supported']:
+        logger.critical("{} is not supported yet. Ignoring this entry...".format(config['chat_provider']['name']))
+        return 127
+
+    # schedule will ALWAYS be there, it is a ddb primarykey
+    schedule_id = figure_out_schedule(config['pagerduty']['schedule_id'])
+
+    if not schedule_id:
+        logger.critical("Exiting: Schedule not found or not valid, see previous errors")
+        return 127
+
+    # Get schedule name
+    pd_schedule_name = config['pagerduty']['schedule_name']
+    if not pd_schedule_name:
+        pd_schedule_name = get_pd_schedule_name(schedule_id)
+
+    # Get PagerDuty and chat user info
+    pd_user = get_pd_user(schedule_id)
+    chat_user = CHAT_USER_NOT_FOUND_RESULT
+    if pd_user['exists']:
+        chat_user = get_chat_user(config['chat_provider']['name'], pd_user['email'], pd_user['name'])
+
+    # Get name to show in topic
+    topic_user = pd_user['name']
+    if chat_user['exists']:
+        topic_user = chat_user['at_handle']
+
+    # Prepare new topic
+    topic = "{}{} is on-call for {}".format(
+        topic_user,
+        " (override)" if pd_user['is_override'] else "",
+        pd_schedule_name
+    )
+
+    for channel in config['chat_provider']['channels']:
+        update_chat_channel(config['chat_provider']['name'], config['chat_provider']['channels'], topic)
 
 
 def handler(event, context):
