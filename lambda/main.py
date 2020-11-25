@@ -310,7 +310,7 @@ def do_work_critical(obj):
     )
 
     for channel in config['chat_provider']['channels']:
-        update_chat_channel(config['chat_provider']['name'], config['chat_provider']['channels'], topic)
+        update_chat_channel(config['chat_provider']['name'], channel, topic)
 
 
 def handler(event, context):
