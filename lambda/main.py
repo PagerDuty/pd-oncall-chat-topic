@@ -90,7 +90,7 @@ def get_slack_at_user(email):
     payload['email'] = email
     try:
         r = requests.get('https://slack.com/api/users.lookupByEmail', payload)
-        username = r.json()['user']['name']
+        username = r.json()['user']['id']
         logger.debug("Next Slack username: {}".format(username))
         return '<@%s>' % username
     except KeyError:
