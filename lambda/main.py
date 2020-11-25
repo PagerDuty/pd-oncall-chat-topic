@@ -6,7 +6,7 @@ import threading
 import logging
 import re
 
-import requests
+from botocore.vendored import requests
 import boto3
 
 # semaphore limit of 5, picked this number arbitrarily
