@@ -1,5 +1,5 @@
-STACKNAME_BASE=pagerduty-oncall-chat-topic
-REGION="ca-central-1"
+STACKNAME_BASE=tpt-pd-oncall-chat-topic
+REGION="us-east-1"
 # Bucket in REGION that is used for deployment (`pd-oncall-chat-topic` is already used)
 BUCKET=$(STACKNAME_BASE)
 SSMKeyArn=$(shell aws kms --region $(REGION) describe-key --key-id alias/aws/ssm --query KeyMetadata.Arn)
