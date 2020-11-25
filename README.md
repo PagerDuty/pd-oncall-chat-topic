@@ -27,6 +27,8 @@ at the company.
   - Set App Name and Development Slack Workspace
   - Add OAuth scopes: `channels.manage`, `channels:read`, `groups:read`,
     `im:write`, `mpim:read`, `users:read`, `users:read.email`
+  - To have this integration replace set the membership for one or more
+    user groups, add the scope `usergroups:write`
   - Install App to Workspace
   - Invite App to channel where you want topic updated
 2. Obtain a PagerDuty API Key (v2) [Directions Here](https://support.pagerduty.com/docs/using-the-api#section-generating-an-api-key)
@@ -45,16 +47,29 @@ at the company.
     [#4](https://github.com/PagerDuty/pd-oncall-chat-topic/issues/4) for ease of
     use)
   - In lieu of above, manually update the table with item entries of this format:
-  ```
-  {
-    "schedule": "P123456",
-    "slack": "C123456",
-    "sched_name": "Optional schedule name to use in topic"
-  }
-  ```
-  (where `schedule` is the PagerDuty Schedule ID, and `slack` is the Slack
-  Channel ID. You can have a space-separated list of channels. `sched_name` is
-  optional and if omitted will be looked up)
+    ```
+    {
+      "schedule": "P123456",
+      "slack": "C123456",
+      "sched_name": "Optional schedule name to use in topic"
+    }
+    ```
+    (where `schedule` is the PagerDuty Schedule ID, and `slack` is the Slack
+    Channel ID. You can have a space-separated list of channels. `sched_name` is
+    optional and if omitted will be looked up)
+  - This integration can be configured to update the membership of one or more
+    Slack user groups by setting `slack_groups` to a list of comma-separated
+    group IDs, e.g.:
+    ```
+    {
+      "schedule": "P123456",
+      "slack": "C123456",
+      "slack_groups": "S05J8PR5H0B",
+      "sched_name": "Optional schedule name to use in topic"
+    }
+    ```
+    Keep in mind that when this integration updates a user group, it will replace
+    remove all existing members of the group.
 
 ## Architecture
 The main part of this infrastructure is an AWS Lambda Function that operates on

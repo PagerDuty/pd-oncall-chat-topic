@@ -212,6 +212,21 @@ def update_slack_topic(channel, proposed_update):
         return None
 
 
+def update_chat_group(chat_provider_name, chat_group, chat_user_id):
+    if chat_provider_name == 'slack':
+        update_slack_group(chat_group, chat_user_id)
+
+
+def update_slack_group(group_id, user_id):
+    payload = {}
+    payload['token'] = boto3.client('ssm').get_parameters(
+        Names=[os.environ['SLACK_API_KEY_NAME']],
+        WithDecryption=True)['Parameters'][0]['Value']
+    payload['usergroup'] = group_id
+    payload['users'] = user_id
+    requests.post('https://slack.com/api/usergroups.users.update', data=payload)
+
+
 def figure_out_schedule(s):
     # Purpose here is to find the schedule id if given a human readable name
     # fingers crossed that this regex holds for awhile. "PXXXXXX"
@@ -239,6 +254,7 @@ def normalize_dynamodb_item(obj):
     config = {
         'chat_provider': {
             'channels':  [],
+            'groups': [],
             'name': 'unknown',
             'supported': False
         },
@@ -254,6 +270,10 @@ def normalize_dynamodb_item(obj):
         if 'S' in obj['slack']:
             slack = obj['slack']['S']
             config['chat_provider']['channels'] = slack.split()
+        if 'slack_groups' in obj.keys():
+            if 'S' in obj['slack_groups']:
+                slack_groups = obj['slack_groups']['S']
+                config['chat_provider']['groups'] = slack_groups.split()
 
     elif 'hipchat' in obj.keys():
         config['chat_provider']['name'] = 'hipchat'
@@ -311,6 +331,10 @@ def do_work_critical(obj):
 
     for channel in config['chat_provider']['channels']:
         update_chat_channel(config['chat_provider']['name'], channel, topic)
+
+    if chat_user['exists']:
+        for group in config['chat_provider']['groups']:
+            update_chat_group(config['chat_provider']['name'], group, chat_user['id'])
 
 
 def handler(event, context):
