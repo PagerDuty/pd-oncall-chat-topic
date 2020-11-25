@@ -25,7 +25,7 @@ PD_API_KEY = boto3.client('ssm').get_parameters(
 
 
 # Get the Current User on-call for a given schedule
-def get_user(schedule_id):
+def get_user(schedule_id, user_key='name', show_override=True):
     global PD_API_KEY
     headers = {
         'Accept': 'application/vnd.pagerduty+json;version=2',
@@ -49,15 +49,16 @@ def get_user(schedule_id):
         logger.critical("ABORT: Not a valid schedule: {}".format(schedule_id))
         return False
     try:
-        username = normal.json()['users'][0]['name']
-        # Check for overrides
-        # If there is *any* override, then the above username is an override
-        # over the normal schedule. The problem must be approached this way
-        # because the /overrides endpoint does not guarentee an order of the
-        # output.
-        override = requests.get(override_url, headers=headers, params=payload)
-        if override.json()['overrides']:  # is not empty list
-            username = username + " (Override)"
+        username = normal.json()['users'][0][user_key]
+        if show_override:
+            # Check for overrides
+            # If there is *any* override, then the above username is an override
+            # over the normal schedule. The problem must be approached this way
+            # because the /overrides endpoint does not guarentee an order of the
+            # output.
+            override = requests.get(override_url, headers=headers, params=payload)
+            if override.json()['overrides']:  # is not empty list
+                username = username + " (Override)"
     except IndexError:
         username = "No One :thisisfine:"
 
@@ -79,6 +80,22 @@ def get_pd_schedule_name(schedule_id):
         logger.debug(r.status_code)
         logger.debug(r.json())
         return None
+
+
+def get_slack_at_user(email):
+    payload = {}
+    payload['token'] = boto3.client('ssm').get_parameters(
+        Names=[os.environ['SLACK_API_KEY_NAME']],
+        WithDecryption=True)['Parameters'][0]['Value']
+    payload['email'] = email
+    try:
+        r = requests.get('https://slack.com/api/users.lookupByEmail', payload)
+        username = r.json()['user']['name']
+        logger.debug("Next Slack username: {}".format(username))
+        return '<@%s>' % username
+    except KeyError:
+        logger.critical("Could not Slack username from email {}.".format(email))
+    return email
 
 
 def get_slack_topic(channel):
@@ -188,7 +205,11 @@ def do_work(obj):
     # schedule will ALWAYS be there, it is a ddb primarykey
     schedule = figure_out_schedule(obj['schedule']['S'])
     if schedule:
-        username = get_user(schedule)
+        if 'slack' in obj.keys():
+            email = get_user(schedule, 'email', False)
+            username = get_slack_at_user(email)
+        else:
+            username = get_user(schedule)
     else:
         logger.critical("Exiting: Schedule not found or not valid, see previous errors")
         return 127
