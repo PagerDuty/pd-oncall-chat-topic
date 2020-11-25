@@ -22,7 +22,13 @@ employees to build and present projects or ideas that fulfill some kind of need
 at the company.
 
 ## How to Deploy
-1. Create an Integrated Bot that you can invite to your channel. https://my.slack.com/services/new/bot
+1. Create an App that you can invite to your channel.
+  - Go to [Slack Apps](https://api.slack.com/apps) and click "Create New App"
+  - Set App Name and Development Slack Workspace
+  - Add OAuth scopes: `channels.manage`, `channels:read`, `groups:read`,
+    `im:write`, `mpim:read`, `users:read`, `users:read.email`
+  - Install App to Workspace
+  - Invite App to channel where you want topic updated
 2. Obtain a PagerDuty API Key (v2) [Directions Here](https://support.pagerduty.com/docs/using-the-api#section-generating-an-api-key)
 3. Deploy CloudFormation
   - Clone repo
