@@ -107,42 +107,25 @@ def update_slack_topic(channel, proposed_update):
         WithDecryption=True)['Parameters'][0]['Value']
     payload['channel'] = channel
 
-    # This is tricky to get correct for all the edge cases
-    # Because Slack adds a '<mailto:foo@example.com|foo@example.com>' behind the
-    # scenes, we need to match the email address in the first capturing group,
-    # then replace the rest of the string with the address
-    # None of this is really ideal because we lose the "linking" aspect in the
-    # Slack Topic.
-    current_full_topic = re.sub(r'<mailto:([a-zA-Z@.]*)(?:[|a-zA-Z@.]*)>',
-            r'\1', get_slack_topic(channel))
-    # Also handle Slack "Subteams" in the same way as above
-    current_full_topic = re.sub(r'<(?:!subteam\^[A-Z0-9|]*)([@A-Za-z-]*)>', r'\1',
-            current_full_topic)
-    # Also handle Slack Channels in the same way as above
-    current_full_topic = re.sub(r'<(?:#[A-Z0-9|]*)([@A-Za-z-]*)>', r'#\1',
-            current_full_topic)
+    current_full_topic = get_slack_topic(channel)
 
-    if current_full_topic:
-        # This should match every case EXCEPT when onboarding a channel and it
-        # already has a '|' in it. Workaround: Fix topic again and it will be
-        # correct in the future
-        current_full_topic_delimit_count = current_full_topic.count('|')
-        c_delimit_count = current_full_topic_delimit_count - 1
-        if c_delimit_count < 1:
-            c_delimit_count = 1
+    in_link = False
+    pipe_idx = -1
+    for pos in range(0, len(current_full_topic)):
+        if current_full_topic[pos] == '<':
+            in_link = True
+        if current_full_topic[pos] == '>':
+            in_link = False
+        if current_full_topic[pos] == '|':
+            if not in_link:
+                pipe_idx = pos
+                break
 
-        # This rsplit is fragile too!
-        # The original intent was to preserve a '|' in the scehdule name but
-        # that means multiple pipes in the topic do not work...
-        try:
-            first_part = current_full_topic.rsplit('|', c_delimit_count)[0].strip()
-            second_part = current_full_topic.replace(first_part + " |", "").strip()
-        except IndexError:  # if there is no '|' in the topic
-            first_part = "none"
-            second_part = current_full_topic
-    else:
-        first_part = "none"
-        second_part = "."  # if there is no topic, just add something
+    first_part = 'none'
+    second_part = '.'
+    if pipe_idx != -1:
+        first_part = current_full_topic[0:pipe_idx].strip()
+        second_part = current_full_topic[pipe_idx + 1:].strip()
 
     if proposed_update != first_part:
         # slack limits topic to 250 chars
