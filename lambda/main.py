@@ -206,8 +206,18 @@ def update_slack_group(group_id, user_id):
         Names=[os.environ['SLACK_API_KEY_NAME']],
         WithDecryption=True)['Parameters'][0]['Value']
     payload['usergroup'] = group_id
-    payload['users'] = user_id
-    requests.post('https://slack.com/api/usergroups.users.update', data=payload)
+
+    r = requests.get('https://slack.com/api/usergroups.users.list', params=payload)
+    try:
+        current_users = r.json()['users']
+    except IndexError:
+        current_users = []
+
+    if user_id not in current_users:
+        payload['users'] = user_id
+        requests.post('https://slack.com/api/usergroups.users.update', data=payload)
+    else:
+        logger.debug("User {} is already in group {}".format(user_id, group_id))
 
 
 def figure_out_schedule(s):

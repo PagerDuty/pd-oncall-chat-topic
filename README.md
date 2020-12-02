@@ -28,7 +28,7 @@ at the company.
   - Add OAuth scopes: `channels.manage`, `channels:read`, `groups:read`,
     `im:write`, `mpim:read`, `users:read`, `users:read.email`
   - To have this integration replace set the membership for one or more
-    user groups, add the scope `usergroups:write`
+    user groups, add the scope `usergroups.read` and `usergroups:write`
   - Install App to Workspace
   - Invite App to channel where you want topic updated
 2. Obtain a PagerDuty API Key (v2) [Directions Here](https://support.pagerduty.com/docs/using-the-api#section-generating-an-api-key)
