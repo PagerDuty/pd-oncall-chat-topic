@@ -195,29 +195,19 @@ def update_slack_topic(channel, proposed_update):
         return None
 
 
-def update_chat_group(chat_provider_name, chat_group, chat_user_id):
+def update_chat_group(chat_provider_name, chat_group, chat_user_ids):
     if chat_provider_name == 'slack':
-        update_slack_group(chat_group, chat_user_id)
+        update_slack_group(chat_group, chat_user_ids)
 
 
-def update_slack_group(group_id, user_id):
+def update_slack_group(group_id, user_ids):
     payload = {}
     payload['token'] = boto3.client('ssm').get_parameters(
         Names=[os.environ['SLACK_API_KEY_NAME']],
         WithDecryption=True)['Parameters'][0]['Value']
     payload['usergroup'] = group_id
-
-    r = requests.get('https://slack.com/api/usergroups.users.list', params=payload)
-    try:
-        current_users = r.json()['users']
-    except IndexError:
-        current_users = []
-
-    if user_id not in current_users:
-        payload['users'] = user_id
-        requests.post('https://slack.com/api/usergroups.users.update', data=payload)
-    else:
-        logger.debug("User {} is already in group {}".format(user_id, group_id))
+    payload['users'] = ','.join(user_ids)
+    requests.post('https://slack.com/api/usergroups.users.update', data=payload)
 
 
 def figure_out_schedule(s):
@@ -252,8 +242,8 @@ def normalize_dynamodb_item(obj):
             'supported': False
         },
         'pagerduty': {
-            'schedule_id': obj['schedule']['S'],
-            'schedule_name': obj['sched_name']['S'] if 'sched_name' in obj else None
+            'schedule_ids': obj['schedule']['S'].split(',') if 'schedule' in obj else [],
+            'schedule_names': obj['sched_name']['S'].split(',') if 'sched_name' in obj else []
         }
     }
 
@@ -280,7 +270,7 @@ def do_work(obj):
     sema.acquire()
     logger.debug("Operating on {}".format(obj))
 
-    return do_work_critical(obj)
+    do_work_critical(obj)
 
     sema.release()
 
@@ -292,42 +282,59 @@ def do_work_critical(obj):
         logger.critical("{} is not supported yet. Ignoring this entry...".format(config['chat_provider']['name']))
         return 127
 
-    # schedule will ALWAYS be there, it is a ddb primarykey
-    schedule_id = figure_out_schedule(config['pagerduty']['schedule_id'])
-
-    if not schedule_id:
-        logger.critical("Exiting: Schedule not found or not valid, see previous errors")
+    if not config['pagerduty']['schedule_ids']:
+        logger.critical("Exiting: no Schedules found in config.")
         return 127
 
-    # Get schedule name
-    pd_schedule_name = config['pagerduty']['schedule_name']
-    if not pd_schedule_name:
-        pd_schedule_name = get_pd_schedule_name(schedule_id)
+    # schedule will ALWAYS be there, it is a ddb primarykey
+    schedule_ids = [figure_out_schedule(schedule_id) for schedule_id in config['pagerduty']['schedule_ids']]
 
-    # Get PagerDuty and chat user info
-    pd_user = get_pd_user(schedule_id)
-    chat_user = CHAT_USER_NOT_FOUND_RESULT
-    if pd_user['exists']:
-        chat_user = get_chat_user(config['chat_provider']['name'], pd_user['email'], pd_user['name'])
+    chat_users = []
+    pd_schedule_names = []
+    pd_users = []
+    topic_users = []
+    for i in range(len(schedule_ids)):
+        schedule_id = schedule_ids[i]
+        if schedule_id == None:
+            logger.critical("Exiting: Schedule not found or not valid, see previous errors")
+            return 127
 
-    # Get name to show in topic
-    topic_user = pd_user['name']
-    if chat_user['exists']:
-        topic_user = chat_user['at_handle']
+        # Get schedule name
+        if i < len(config['pagerduty']['schedule_names']) and config['pagerduty']['schedule_names'][i].strip() != '':
+            pd_schedule_names.append(config['pagerduty']['schedule_names'][i])
+        else:
+            pd_schedule_names.append(get_pd_schedule_name(schedule_id))
+
+        # Get PagerDuty user info
+        pd_user = get_pd_user(schedule_id)
+        pd_users.append(pd_user)
+
+        # Get chat user info
+        chat_user = CHAT_USER_NOT_FOUND_RESULT
+        if pd_user['exists']:
+            chat_user = get_chat_user(config['chat_provider']['name'], pd_user['email'], pd_user['name'])
+        chat_users.append(chat_user)
+
+        # Get name to show in topic
+        topic_user = pd_user['name']
+        if chat_user['exists']:
+            topic_user = chat_user['at_handle']
+        topic_users.append(topic_user)
 
     # Prepare new topic
     topic = "{}{} is on-call for {}".format(
-        topic_user,
-        " (override)" if pd_user['is_override'] else "",
-        pd_schedule_name
+        topic_users[0],
+        " (override)" if pd_users[0]['is_override'] else "",
+        pd_schedule_names[0]
     )
 
     for channel in config['chat_provider']['channels']:
         update_chat_channel(config['chat_provider']['name'], channel, topic)
 
-    if chat_user['exists']:
+    chat_user_ids = list(map(lambda c: c['id'], filter(lambda c: c['exists'], chat_users)))
+    if len(chat_user_ids) > 0:
         for group in config['chat_provider']['groups']:
-            update_chat_group(config['chat_provider']['name'], group, chat_user['id'])
+            update_chat_group(config['chat_provider']['name'], group, chat_user_ids)
 
 
 def handler(event, context):
