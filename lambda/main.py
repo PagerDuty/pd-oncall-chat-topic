@@ -120,13 +120,16 @@ def get_slack_user(email, name):
         'name': name
     }
 
-    try:
-        r = requests.get('https://slack.com/api/users.lookupByEmail', payload)
-        slack_user['id'] = r.json()['user']['id']
-        slack_user['exists'] = True
-        slack_user['at_handle'] = '<@{}>'.format(slack_user['id'])
-    except KeyError:
-        logger.warn("Could not Slack username from email {}.".format(email))
+    r = requests.get('https://slack.com/api/users.lookupByEmail', payload)
+    rjson = r.json()
+    if not rjson['ok']:
+        if rjson['error'] == 'users_not_found':
+            return slack_user
+        else:
+            raise Exception("Failed to lookup user by email {}: {}".format(email, rjson['error']))
+    slack_user['id'] = rjson['user']['id']
+    slack_user['exists'] = True
+    slack_user['at_handle'] = '<@{}>'.format(slack_user['id'])
 
     return slack_user
 
@@ -270,7 +273,10 @@ def do_work(obj):
     sema.acquire()
     logger.debug("Operating on {}".format(obj))
 
-    do_work_critical(obj)
+    try:
+        do_work_critical(obj)
+    except Exception as e:
+        logger.error("Failed to process {}: {}".format(obj, str(e)))
 
     sema.release()
 
