@@ -73,11 +73,11 @@ Resources:
     Properties:
       AttributeDefinitions:
         -
-          AttributeName: "schedule"
+          AttributeName: "escalation_policy"
           AttributeType: "S"
       KeySchema:
         -
-          AttributeName: "schedule"
+          AttributeName: "escalation_policy"
           KeyType: "HASH"
       ProvisionedThroughput:
         ReadCapacityUnits: 1

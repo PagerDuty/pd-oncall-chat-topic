@@ -31,12 +31,9 @@ def get_user(schedule_id):
         'Accept': 'application/vnd.pagerduty+json;version=2',
         'Authorization': 'Token token={token}'.format(token=PD_API_KEY)
     }
-    normal_url = 'https://api.pagerduty.com/schedules/{0}/users'.format(
-        schedule_id
-    )
-    override_url = 'https://api.pagerduty.com/schedules/{0}/overrides'.format(
-        schedule_id
-    )
+    normal_url = f'https://api.pagerduty.com/schedules/{schedule_id}/users'
+    override_url = f'https://api.pagerduty.com/schedules/{schedule_id}/overrides'
+
     # This value should be less than the running interval
     # It is best to use UTC for the datetime object
     now = datetime.now(timezone.utc)
@@ -44,6 +41,7 @@ def get_user(schedule_id):
     payload = {}
     payload['since'] = since.isoformat()
     payload['until'] = now.isoformat()
+
     normal = requests.get(normal_url, headers=headers, params=payload)
     if normal.status_code == 404:
         logger.critical("ABORT: Not a valid schedule: {}".format(schedule_id))
@@ -53,7 +51,7 @@ def get_user(schedule_id):
         # Check for overrides
         # If there is *any* override, then the above username is an override
         # over the normal schedule. The problem must be approached this way
-        # because the /overrides endpoint does not guarentee an order of the
+        # because the /overrides endpoint does not guarantee an order of the
         # output.
         override = requests.get(override_url, headers=headers, params=payload)
         if override.json()['overrides']:  # is not empty list
@@ -69,9 +67,9 @@ def get_pd_schedule_name(schedule_id):
     global PD_API_KEY
     headers = {
         'Accept': 'application/vnd.pagerduty+json;version=2',
-        'Authorization': 'Token token={token}'.format(token=PD_API_KEY)
+        'Authorization': f'Token token={PD_API_KEY}'
     }
-    url = 'https://api.pagerduty.com/schedules/{0}'.format(schedule_id)
+    url = f'https://api.pagerduty.com/schedules/{schedule_id}'
     r = requests.get(url, headers=headers)
     try:
         return r.json()['schedule']['name']
@@ -157,58 +155,30 @@ def update_slack_topic(channel, proposed_update):
         return None
 
 
-def figure_out_schedule(s):
-    # Purpose here is to find the schedule id if given a human readable name
-    # fingers crossed that this regex holds for awhile. "PXXXXXX"
-    if re.match('^P[a-zA-Z0-9]{6}', s):
-        return s
-    global PD_API_KEY
-    headers = {
-        'Accept': 'application/vnd.pagerduty+json;version=2',
-        'Authorization': 'Token token={token}'.format(token=PD_API_KEY)
-    }
-    url = 'https://api.pagerduty.com/schedules/'
-    payload = {}
-    payload['query'] = s
-    # If there is no override, then check the schedule directly
-    r = requests.get(url, headers=headers, params=payload)
-    try:
-        # This is fragile. fuzzy search may not do what you want
-        sid = r.json()['schedules'][0]['id']
-    except IndexError:
-        logger.debug("Schedule Not Found for: {}".format(s))
-        sid = None
-    return sid
-
-
 def do_work(obj):
-    # entrypoint of the thread
     sema.acquire()
     logger.debug("Operating on {}".format(obj))
-    # schedule will ALWAYS be there, it is a ddb primarykey
-    schedule = figure_out_schedule(obj['schedule']['S'])
-    if schedule:
-        username = get_user(schedule)
+
+    policy = obj['policy']['S']
+    schedules = policy.split()
+
+    if schedules:
+        usernames = [get_user(schedule) for schedule in schedules]
     else:
-        logger.critical("Exiting: Schedule not found or not valid, see previous errors")
+        logger.critical("Exiting: Escalation Policy not found or not valid, see previous errors")
         return 127
-    try:
-        sched_name = obj['sched_name']['S']
-    except:
-        sched_name = get_pd_schedule_name(schedule)
-    if username is not None:  # then it is valid and update the chat topic
-        topic = "{} is on-call for {}".format(
-            username,
-            sched_name
-        )
+
+    if usernames:  # then it is valid and update the chat topic
+        topic = "On Call:"
+
+        for i, username in enumerate(usernames, start=1):
+            topic += f" L{i}-{username}"
+
         if 'slack' in obj.keys():
             slack = obj['slack']['S']
-            # 'slack' may contain multiple channels seperated by whitespace
+            # 'slack' may contain multiple channels separated by whitespace
             for channel in slack.split():
                 update_slack_topic(channel, topic)
-        elif 'hipchat' in obj.keys():
-            # hipchat = obj['hipchat']['S']
-            logger.critical("HipChat is not supported yet. Ignoring this entry...")
     sema.release()
 
 
