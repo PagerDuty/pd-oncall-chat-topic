@@ -96,7 +96,7 @@ Resources:
         Bucket: !Ref Bucket
         Key: !Ref md5
       Layers:
-        - arn:aws:lambda:ca-central-1:778625758767:layer:AWSLambda-Python-AWS-SDK:4 # for ca-central-1 region
+        - arn:aws:lambda:eu-west-1:399891621064:layer:AWSLambda-Python-AWS-SDK:4 # For eu-west-1
       Environment:
         Variables:
           PD_API_KEY_NAME: !Ref PDSSMKeyName
