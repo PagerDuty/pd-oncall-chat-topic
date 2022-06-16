@@ -90,7 +90,7 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       Handler: main.handler
-      Runtime: python3.6
+      Runtime: python3.9
       Timeout: 120
       CodeUri:
         Bucket: !Ref Bucket
