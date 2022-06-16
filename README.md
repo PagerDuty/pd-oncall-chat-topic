@@ -1,27 +1,34 @@
 # pd-oncall-chat-topic
+
 AWS Lambda Function that updates a Chat Room topic (eg, Slack)
 
 ![Screenshot](https://raw.githubusercontent.com/PagerDuty/pd-oncall-chat-topic/master/screenshot.png)
 
+This repo is a fork of the original repo by PagerDuty. We have modified it to
+suit our internal purposes, and have submitted the features to the original
+repository.
+
+## Teachers Pay Teachers
+
+Note to Teachers Pay Teachers employees:
+
+This is a **public** GitHub repository. Do not put sensitive information in
+here.  Do not change the LICENSE, and make sure to retain the original
+copyright notice.
+
+For TpT employees who want to connect their Slack handle with a PagerDuty
+Schedule, see
+[this internal wiki](https://teacherspayteachers.atlassian.net/wiki/spaces/ENGINEERING/pages/2772107268/Syncing+On-Call+Slack+Handle+with+PagerDuty+Schedules).
 
 ## Motivation
-At [PagerDuty](https://www.pagerduty.com/), we
-[use](https://www.pagerduty.com/blog/how-does-pagerduty-use-pagerduty/)
-PagerDuty to manage our on-call schedules. One integration that we like is
-knowing who is on-call for a given team, via posting the information in a Slack
-channel topic.
 
-At PagerDuty Summit, one of our customers asked if we have this integration
-open-sourced for them to use as well. At the time, we did not, it was deeply
-integrated into our ChatOps tooling that is very specific to the PagerDuty
-infrastructure. However, this integration is applicable to many other
-organizations.
+At Teachers Pay teachers, we maintain on-call rotations in PagerDuty, and often
+we want to be able to reach the person who is on-call in Slack.
 
-This project started at one of our Hack Days, a day put aside monthly for
-employees to build and present projects or ideas that fulfill some kind of need
-at the company.
+This repository integrates PagerDuty with a Slack handle.
 
-## How to Deploy
+## Setup
+
 1. Create an App that you can invite to your channel.
   - Go to [Slack Apps](https://api.slack.com/apps) and click "Create New App"
   - Set App Name and Development Slack Workspace
@@ -71,7 +78,21 @@ at the company.
     Keep in mind that when this integration updates a user group, it will replace
     remove all existing members of the group.
 
+## Contributing
+
+Note that the main branch of our fork is `tpt`. This is on purpose. Pull
+requests should be made against this branch, and should also be submitted
+upstream to PagerDuty's clone.
+
+Do not make changes to the `master` branch. Pull changes to that branch from
+PagerDuty's clone.
+
+## Deploy
+
+To deploy new code changes, run `make deploy` locally.
+
 ## Architecture
+
 The main part of this infrastructure is an AWS Lambda Function that operates on
 a schedule (cron), reads configuration information from an DynomoDB Table and
 secrets from AWS EC2 Parameter Store. This is all deployed from a AWS
@@ -80,13 +101,9 @@ CloudFormation template.
 ![Architecture Diagram](https://raw.githubusercontent.com/PagerDuty/pd-oncall-chat-topic/master/diagram.png)
 
 ## Cost
+
 The way that this Lambda Function is configured, is to run on a schedule every 5
 minutes. Some basic (anecdotal) testing revealed that the execution is about 5
 seconds per 5 updates (via threading). Assuming double that and erroring on the
 side of a large configuration (10x) the execution time will cost below $2/month.
 The DDB table will cost, ~$0.60/month.
-
-
-## Contact
-This integration is primarily maintained by the SRE Team at PagerDuty. The best
-way to reach us is by opening a GitHub issue.
