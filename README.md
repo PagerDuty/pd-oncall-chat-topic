@@ -34,7 +34,7 @@ at the company.
     commands should work unless modified elsewhere (advanced config).
   - `make put-pd-key`
   - `make put-slack-key`
-5. Write Config to DynomoDB for which channels to update.
+5. Write Config to DynamoDB for which channels to update.
   - It is possible to use the AWS CLI for this (or finish
     [#4](https://github.com/PagerDuty/pd-oncall-chat-topic/issues/4) for ease of
     use)
@@ -52,7 +52,7 @@ at the company.
 
 ## Architecture
 The main part of this infrastructure is an AWS Lambda Function that operates on
-a schedule (cron), reads configuration information from an DynomoDB Table and
+a schedule (cron), reads configuration information from an DynamoDB Table and
 secrets from AWS EC2 Parameter Store. This is all deployed from a AWS
 CloudFormation template.
 
