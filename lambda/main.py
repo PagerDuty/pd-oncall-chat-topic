@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 
+from operator import indexOf
 import os
 from datetime import datetime, timezone, timedelta
 import threading
@@ -186,29 +187,42 @@ def do_work(obj):
     sema.acquire()
     logger.debug("Operating on {}".format(obj))
     # schedule will ALWAYS be there, it is a ddb primarykey
-    schedule = figure_out_schedule(obj['schedule']['S'])
-    if schedule:
-        username = get_user(schedule)
-    else:
-        logger.critical("Exiting: Schedule not found or not valid, see previous errors")
-        return 127
-    try:
-        sched_name = obj['sched_name']['S']
-    except:
-        sched_name = get_pd_schedule_name(schedule)
-    if username is not None:  # then it is valid and update the chat topic
-        topic = "{} is on-call for {}".format(
-            username,
-            sched_name
-        )
-        if 'slack' in obj.keys():
-            slack = obj['slack']['S']
-            # 'slack' may contain multiple channels seperated by whitespace
-            for channel in slack.split():
-                update_slack_topic(channel, topic)
-        elif 'hipchat' in obj.keys():
-            # hipchat = obj['hipchat']['S']
-            logger.critical("HipChat is not supported yet. Ignoring this entry...")
+    schedules = obj['schedule']['S']
+    oncall_dict = {}
+    for schedule in schedules.split():  #schedule can now be a whitespace separated 'list' in a string
+        schedule = figure_out_schedule(schedule)
+
+        if schedule:
+            username = get_user(schedule)
+        else:
+            logger.critical("Exiting: Schedule not found or not valid, see previous errors")
+            return 127
+        try:
+            sched_names = (obj['sched_name']['S']).split()
+            sched_name = sched_names[schedules.index(schedule)]
+        except:
+            sched_name = get_pd_schedule_name(schedule)
+        oncall_dict[username] = sched_name
+
+    if oncall_dict:  # then it is valid and update the chat topic
+        topic = ""
+        i = 0
+        for user in oncall_dict:
+            if i != 0:
+                topic += ", "
+            topic += "{} is on-call for {}".format(
+                user,
+                oncall_dict[user]
+            )
+            if 'slack' in obj.keys():
+                slack = obj['slack']['S']
+                # 'slack' may contain multiple channels seperated by whitespace
+                for channel in slack.split():
+                    update_slack_topic(channel, topic)
+            elif 'hipchat' in obj.keys():
+                # hipchat = obj['hipchat']['S']
+                logger.critical("HipChat is not supported yet. Ignoring this entry...")
+            i += 1
     sema.release()
 
 
