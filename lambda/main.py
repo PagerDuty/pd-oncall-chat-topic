@@ -1,6 +1,5 @@
 #!/usr/bin/env python
 
-from operator import indexOf
 import os
 from datetime import datetime, timezone, timedelta
 import threading
@@ -199,7 +198,7 @@ def do_work(obj):
             return 127
         try:
             sched_names = (obj['sched_name']['S']).split()
-            sched_name = sched_names[schedules.index(schedule)]
+            sched_name = sched_names[schedules.index(schedule)] #We want the schedule name in the same position as the schedule we're using
         except:
             sched_name = get_pd_schedule_name(schedule)
         oncall_dict[username] = sched_name
