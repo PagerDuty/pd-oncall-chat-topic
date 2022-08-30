@@ -187,7 +187,7 @@ def do_work(obj):
     logger.debug("Operating on {}".format(obj))
     # schedule will ALWAYS be there, it is a ddb primarykey
     schedules = obj['schedule']['S']
-    schedule_list = schedules.split()
+    schedule_list = schedules.split(',')
     oncall_dict = {}
     for schedule in schedule_list:  #schedule can now be a whitespace separated 'list' in a string
         schedule = figure_out_schedule(schedule)
@@ -198,7 +198,7 @@ def do_work(obj):
             logger.critical("Exiting: Schedule not found or not valid, see previous errors")
             return 127
         try:
-            sched_names = (obj['sched_name']['S']).split()
+            sched_names = (obj['sched_name']['S']).split(',')
             sched_name = sched_names[schedule_list.index(schedule)] #We want the schedule name in the same position as the schedule we're using
         except:
             sched_name = get_pd_schedule_name(schedule)
