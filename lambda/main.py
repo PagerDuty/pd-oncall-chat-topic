@@ -186,21 +186,36 @@ def do_work(obj):
     sema.acquire()
     logger.debug("Operating on {}".format(obj))
     # schedule will ALWAYS be there, it is a ddb primarykey
-    schedule = figure_out_schedule(obj['schedule']['S'])
-    if schedule:
-        username = get_user(schedule)
-    else:
-        logger.critical("Exiting: Schedule not found or not valid, see previous errors")
-        return 127
-    try:
-        sched_name = obj['sched_name']['S']
-    except:
-        sched_name = get_pd_schedule_name(schedule)
-    if username is not None:  # then it is valid and update the chat topic
-        topic = "{} is on-call for {}".format(
-            username,
-            sched_name
-        )
+    schedules = obj['schedule']['S']
+    schedule_list = schedules.split()
+    oncall_dict = {}
+    for schedule in schedule_list:  #schedule can now be a whitespace separated 'list' in a string
+        schedule = figure_out_schedule(schedule)
+
+        if schedule:
+            username = get_user(schedule)
+        else:
+            logger.critical("Exiting: Schedule not found or not valid, see previous errors")
+            return 127
+        try:
+            sched_names = (obj['sched_name']['S']).split()
+            sched_name = sched_names[schedule_list.index(schedule)] #We want the schedule name in the same position as the schedule we're using
+        except:
+            sched_name = get_pd_schedule_name(schedule)
+        oncall_dict[username] = sched_name
+
+    if oncall_dict:  # then it is valid and update the chat topic
+        topic = ""
+        i = 0
+        for user in oncall_dict:
+            if i != 0:
+                topic += ", "
+            topic += "{} is on-call for {}".format(
+                user,
+                oncall_dict[user]
+            )
+            i += 1
+            
         if 'slack' in obj.keys():
             slack = obj['slack']['S']
             # 'slack' may contain multiple channels seperated by whitespace

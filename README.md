@@ -34,7 +34,7 @@ at the company.
     commands should work unless modified elsewhere (advanced config).
   - `make put-pd-key`
   - `make put-slack-key`
-5. Write Config to DynomoDB for which channels to update.
+5. Write Config to DynamoDB for which channels to update.
   - It is possible to use the AWS CLI for this (or finish
     [#4](https://github.com/PagerDuty/pd-oncall-chat-topic/issues/4) for ease of
     use)
@@ -47,12 +47,13 @@ at the company.
   }
   ```
   (where `schedule` is the PagerDuty Schedule ID, and `slack` is the Slack
-  Channel ID. You can have a space-separated list of channels. `sched_name` is
-  optional and if omitted will be looked up)
+  Channel ID. You can have a space-separated list of channels. `sched_name` is optional and if omitted will be looked up)
+  If you have a split on-call rotation, you may places multiple schedules and schedule names separated by whitespace.
+  
 
 ## Architecture
 The main part of this infrastructure is an AWS Lambda Function that operates on
-a schedule (cron), reads configuration information from an DynomoDB Table and
+a schedule (cron), reads configuration information from an DynamoDB Table and
 secrets from AWS EC2 Parameter Store. This is all deployed from a AWS
 CloudFormation template.
 
