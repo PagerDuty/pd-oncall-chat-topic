@@ -47,8 +47,9 @@ at the company.
   }
   ```
   (where `schedule` is the PagerDuty Schedule ID, and `slack` is the Slack
-  Channel ID. You can have a space-separated list of channels. `sched_name` is
-  optional and if omitted will be looked up)
+  Channel ID. You can have a space-separated list of channels. `sched_name` is optional and if omitted will be looked up)
+  If you have a split on-call rotation, you may places multiple schedules and schedule names separated by whitespace.
+  
 
 ## Architecture
 The main part of this infrastructure is an AWS Lambda Function that operates on

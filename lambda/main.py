@@ -187,8 +187,9 @@ def do_work(obj):
     logger.debug("Operating on {}".format(obj))
     # schedule will ALWAYS be there, it is a ddb primarykey
     schedules = obj['schedule']['S']
+    schedule_list = schedules.split()
     oncall_dict = {}
-    for schedule in schedules.split():  #schedule can now be a whitespace separated 'list' in a string
+    for schedule in schedule_list:  #schedule can now be a whitespace separated 'list' in a string
         schedule = figure_out_schedule(schedule)
 
         if schedule:
@@ -198,7 +199,7 @@ def do_work(obj):
             return 127
         try:
             sched_names = (obj['sched_name']['S']).split()
-            sched_name = sched_names[schedules.index(schedule)] #We want the schedule name in the same position as the schedule we're using
+            sched_name = sched_names[schedule_list.index(schedule)] #We want the schedule name in the same position as the schedule we're using
         except:
             sched_name = get_pd_schedule_name(schedule)
         oncall_dict[username] = sched_name
@@ -213,15 +214,16 @@ def do_work(obj):
                 user,
                 oncall_dict[user]
             )
-            if 'slack' in obj.keys():
-                slack = obj['slack']['S']
-                # 'slack' may contain multiple channels seperated by whitespace
-                for channel in slack.split():
-                    update_slack_topic(channel, topic)
-            elif 'hipchat' in obj.keys():
-                # hipchat = obj['hipchat']['S']
-                logger.critical("HipChat is not supported yet. Ignoring this entry...")
             i += 1
+            
+        if 'slack' in obj.keys():
+            slack = obj['slack']['S']
+            # 'slack' may contain multiple channels seperated by whitespace
+            for channel in slack.split():
+                update_slack_topic(channel, topic)
+        elif 'hipchat' in obj.keys():
+            # hipchat = obj['hipchat']['S']
+            logger.critical("HipChat is not supported yet. Ignoring this entry...")
     sema.release()
 
 
