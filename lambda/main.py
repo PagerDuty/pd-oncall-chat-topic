@@ -31,10 +31,7 @@ def get_user(schedule_id):
         'Accept': 'application/vnd.pagerduty+json;version=2',
         'Authorization': 'Token token={token}'.format(token=PD_API_KEY)
     }
-    normal_url = 'https://api.pagerduty.com/schedules/{0}/users'.format(
-        schedule_id
-    )
-    override_url = 'https://api.pagerduty.com/schedules/{0}/overrides'.format(
+    schedule_url = 'https://api.pagerduty.com/schedules/{0}'.format(
         schedule_id
     )
     # This value should be less than the running interval
@@ -44,26 +41,20 @@ def get_user(schedule_id):
     payload = {}
     payload['since'] = since.isoformat()
     payload['until'] = now.isoformat()
-    normal = requests.get(normal_url, headers=headers, params=payload)
-    if normal.status_code == 404:
+    schedule = requests.get(schedule_url, headers=headers, params=payload)
+    if schedule.status_code == 404:
         logger.critical("ABORT: Not a valid schedule: {}".format(schedule_id))
         return False
     try:
-        username = normal.json()['users'][0]['name']
-        # Check for overrides
-        # If there is *any* override, then the above username is an override
-        # over the normal schedule. The problem must be approached this way
-        # because the /overrides endpoint does not guarentee an order of the
-        # output.
-        override = requests.get(override_url, headers=headers, params=payload)
-        if override.json()['overrides']:  # is not empty list
+        username = schedule.json()['final_schedule']['rendered_schedule_entries'][0]['users']['summary']
+        # Check if the current user is on-call due to an override
+        if schedule.json()['overrides_subschedule']['rendered_schedule_entries']:  # is not empty list
             username = username + " (Override)"
     except IndexError:
         username = "No One :thisisfine:"
 
     logger.info("Currently on call: {}".format(username))
     return username
-
 
 def get_pd_schedule_name(schedule_id):
     global PD_API_KEY
