@@ -8,8 +8,7 @@ MD5=$(shell md5sum lambda/*.py | md5sum | cut -d ' ' -f 1)
 
 
 deploy:
-	cd lambda && \
-		zip -r9 /tmp/deployment.zip *.py && \
+	zip -r9 /tmp/deployment.zip functions && \
 		aws s3 cp --region $(REGION) /tmp/deployment.zip \
 			s3://$(BUCKET)/$(MD5) && \
 		rm -rf /tmp/deployment.zip

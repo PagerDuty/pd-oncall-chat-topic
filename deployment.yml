@@ -89,7 +89,7 @@ Resources:
   ChatTopicFunction:
     Type: AWS::Serverless::Function
     Properties:
-      Handler: main.handler
+      Handler: functions.update_topics.handler.handler
       Runtime: python3.8
       Timeout: 120
       CodeUri:

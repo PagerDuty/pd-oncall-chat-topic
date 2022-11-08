@@ -9,6 +9,7 @@ import re
 from botocore.vendored import requests
 import boto3
 
+
 # semaphore limit of 5, picked this number arbitrarily
 maxthreads = 5
 sema = threading.Semaphore(value=maxthreads)
@@ -17,11 +18,6 @@ logging.getLogger('boto3').setLevel(logging.CRITICAL)
 logging.getLogger('botocore').setLevel(logging.CRITICAL)
 logger = logging.getLogger()
 logger.setLevel(logging.DEBUG)
-
-# Fetch the PD API token from PD_API_KEY_NAME key in SSM
-PD_API_KEY = boto3.client('ssm').get_parameters(
-    Names=[os.environ['PD_API_KEY_NAME']],
-    WithDecryption=True)['Parameters'][0]['Value']
 
 
 # Get the Current User on-call for a given schedule
@@ -226,9 +222,16 @@ def do_work(obj):
             logger.critical("HipChat is not supported yet. Ignoring this entry...")
     sema.release()
 
+def init_config():
+    global PD_API_KEY
+    # Fetch the PD API token from PD_API_KEY_NAME key in SSM
+    PD_API_KEY = boto3.client('ssm').get_parameters(
+        Names=[os.environ['PD_API_KEY_NAME']],
+        WithDecryption=True)['Parameters'][0]['Value']
 
 def handler(event, context):
     print(event)
+    init_config()
     ddb = boto3.client('dynamodb')
     response = ddb.scan(TableName=os.environ['CONFIG_TABLE'])
     threads = []
@@ -238,3 +241,6 @@ def handler(event, context):
     # Start threads and wait for all to finish
     [t.start() for t in threads]
     [t.join() for t in threads]
+
+def test123():
+    print('nice')
