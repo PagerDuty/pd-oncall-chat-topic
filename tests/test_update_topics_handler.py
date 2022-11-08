@@ -71,6 +71,7 @@ def test_get_pdapi_headers_environment_not_ready_PD_API_KEY():
     with pytest.raises(EnvironmentVariableNotReadyError, match="^Variable 'PD_API_KEY'.*"):
         headers = handler.get_pdapi_headers()
 
+
 def test_init_threading():
     handler.init_threading()
     assert 5 == handler.MAX_THREADS
