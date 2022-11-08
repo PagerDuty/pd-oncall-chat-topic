@@ -15,6 +15,9 @@ SEMA = None
 LOGGER = None
 
 PD_API_KEY = None
+PD_API_FQDN = None
+PD_API_ROUTE_SCHEDULE_USERS = None
+PD_API_ROUTE_SCHEDULE_OVERRIDES = None
 
 # Get the Current User on-call for a given schedule
 def get_user(schedule_id):
