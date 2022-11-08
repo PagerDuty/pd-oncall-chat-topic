@@ -10,7 +10,11 @@ DEV_ENV_PATH = '.env.dev'
 
 
 @pytest.fixture(autouse=True)
-def dev_config():
+def dev_config(mocker):
+    # NOTE: We're mocking this function since it initates an internet connection
+    #       under normal circumstances. 
+    mocker.patch('functions.update_topics.handler.init_pd_api_key', return_value=None)
+
     load_dotenv(dotenv_path=Path(DEV_ENV_PATH))
     handler.init_config()
 

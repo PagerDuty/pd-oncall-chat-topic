@@ -270,6 +270,16 @@ def init_logging():
     LOGGER.setLevel(logging.DEBUG)
 
 
+def init_pd_api_key():
+    # Fetch the PD API token from PD_API_KEY_NAME key in SSM
+    try:
+        PD_API_KEY = boto3.client('ssm').get_parameters(
+            Names=[os.environ['PD_API_KEY_NAME']],
+            WithDecryption=True)['Parameters'][0]['Value']
+    except NoRegionError:
+        PD_API_KEY = None
+        # TODO: Actually handle me
+
 def init_config():
     global PD_API_KEY, MAX_THREADS, PD_API_FQDN, PD_API_ROUTE_SCHEDULE_USERS, PD_API_ROUTE_SCHEDULE_OVERRIDES
 
@@ -281,13 +291,7 @@ def init_config():
     PD_API_ROUTE_SCHEDULE_USERS = os.environ.get('PD_API_ROUTE_SCHEDULE_USERS')
     PD_API_ROUTE_SCHEDULE_OVERRIDES = os.environ.get('PD_API_ROUTE_SCHEDULE_OVERRIDES')
     
-    # Fetch the PD API token from PD_API_KEY_NAME key in SSM
-    try:
-        PD_API_KEY = boto3.client('ssm').get_parameters(
-            Names=[os.environ['PD_API_KEY_NAME']],
-            WithDecryption=True)['Parameters'][0]['Value']
-    except NoRegionError:
-        PD_API_KEY = None
+    init_pd_api_key()
 
 
 def handler(event, context):

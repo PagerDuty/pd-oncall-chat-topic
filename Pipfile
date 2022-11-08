@@ -10,6 +10,7 @@ boto3 = "*"
 [dev-packages]
 pytest = "*"
 python-dotenv = "*"
+pytest-mock = "*"
 
 [requires]
 python_version = "3.10"
