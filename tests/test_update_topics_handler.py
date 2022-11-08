@@ -22,6 +22,23 @@ def dev_config(mocker):
     handler.init_config()
 
 
+def test_get_pdapi_schedules_route():
+    route = handler.get_pdapi_schedules_route()
+    assert 'https://api.pagerduty.com/schedules' == route
+
+
+def test_get_pdapi_schedules_route_environment_not_ready_PD_API_FQDN():
+    handler.PD_API_FQDN = None
+    with pytest.raises(EnvironmentVariableNotReadyError, match="^Variable 'PD_API_FQDN'.*"):
+        route = handler.get_pdapi_schedules_route()
+
+
+def test_get_pdapi_schedules_route_environment_not_ready_PD_API_ROUTE_SCHEDULES():
+    handler.PD_API_ROUTE_SCHEDULES = None
+    with pytest.raises(EnvironmentVariableNotReadyError, match="^Variable 'PD_API_ROUTE_SCHEDULES'.*"):
+        route = handler.get_pdapi_schedules_route()
+
+
 def test_get_pdapi_schedule_users_route():
     schedule_id = 'ABC0123'
     route = handler.get_pdapi_schedule_users_route(schedule_id)
@@ -85,5 +102,6 @@ def test_init_config():
     handler.init_config()
     assert handler.MAX_THREADS is not None
     assert handler.PD_API_FQDN is not None
+    assert handler.PD_API_ROUTE_SCHEDULES is not None
     assert handler.PD_API_ROUTE_SCHEDULE_USERS is not None
     assert handler.PD_API_ROUTE_SCHEDULE_OVERRIDES is not None

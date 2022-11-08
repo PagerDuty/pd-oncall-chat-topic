@@ -17,6 +17,7 @@ LOGGER = None
 
 PD_API_KEY = None
 PD_API_FQDN = None
+PD_API_ROUTE_SCHEDULES = None
 PD_API_ROUTE_SCHEDULE_USERS = None
 PD_API_ROUTE_SCHEDULE_OVERRIDES = None
 
@@ -32,6 +33,17 @@ class EnvironmentVariableNotReadyError(Exception):
         self.variable_name = variable_name
         self.message = f"Variable '{variable_name}' is not instantiated! Invoke '{init_config.__name__}()' before use!"
         super().__init__(self.message)
+
+
+def get_pdapi_schedules_route():
+    if PD_API_FQDN is None:
+        raise EnvironmentVariableNotReadyError('PD_API_FQDN')
+
+    if PD_API_ROUTE_SCHEDULES is None:
+        raise EnvironmentVariableNotReadyError('PD_API_ROUTE_SCHEDULES')
+
+    route = f"https://{PD_API_FQDN}/{PD_API_ROUTE_SCHEDULES}"
+    return route    
 
 
 def get_pdapi_schedule_users_route(schedule_id):
@@ -104,11 +116,8 @@ def get_user(schedule_id):
 
 def get_pd_schedule_name(schedule_id):
     global PD_API_KEY
-    headers = {
-        'Accept': 'application/vnd.pagerduty+json;version=2',
-        'Authorization': 'Token token={token}'.format(token=PD_API_KEY)
-    }
-    url = 'https://api.pagerduty.com/schedules/{0}'.format(schedule_id)
+    headers = get_pdapi_headers()
+    url = get_pdapi_schedules_route(schedule_id)
     r = requests.get(url, headers=headers)
     try:
         return r.json()['schedule']['name']
@@ -200,11 +209,8 @@ def figure_out_schedule(s):
     if re.match('^P[a-zA-Z0-9]{6}', s):
         return s
     global PD_API_KEY
-    headers = {
-        'Accept': 'application/vnd.pagerduty+json;version=2',
-        'Authorization': 'Token token={token}'.format(token=PD_API_KEY)
-    }
-    url = 'https://api.pagerduty.com/schedules/'
+    headers = get_pdapi_headers()
+    url = get_pdapi_schedules_route()
     payload = {}
     payload['query'] = s
     # If there is no override, then check the schedule directly
@@ -291,13 +297,15 @@ def load_pd_api_key():
 
 
 def init_config():
-    global PD_API_KEY, MAX_THREADS, PD_API_FQDN, PD_API_ROUTE_SCHEDULE_USERS, PD_API_ROUTE_SCHEDULE_OVERRIDES
+    global PD_API_KEY, MAX_THREADS, PD_API_FQDN
+    global PD_API_ROUTE_SCHEDULES, PD_API_ROUTE_SCHEDULE_USERS, PD_API_ROUTE_SCHEDULE_OVERRIDES
 
     init_threading()
     init_logging()
 
     MAX_THREADS = os.environ.get('MAX_THREADS')
     PD_API_FQDN = os.environ.get('PD_API_FQDN')
+    PD_API_ROUTE_SCHEDULES = os.environ.get('PD_API_ROUTE_SCHEDULES')
     PD_API_ROUTE_SCHEDULE_USERS = os.environ.get('PD_API_ROUTE_SCHEDULE_USERS')
     PD_API_ROUTE_SCHEDULE_OVERRIDES = os.environ.get('PD_API_ROUTE_SCHEDULE_OVERRIDES')
     PD_API_KEY = load_pd_api_key()

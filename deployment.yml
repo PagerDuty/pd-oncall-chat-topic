@@ -104,6 +104,7 @@ Resources:
           CONFIG_TABLE: !Ref ConfigTable
           MAX_THREADS: 5
           PD_API_FQDN: 'api.pagerduty.com'
+          PD_API_ROUTE_SCHEDULES: 'schedules'
           PD_API_ROUTE_SCHEDULE_USERS: 'schedules/{0}/users'
           PD_API_ROUTE_SCHEDULE_OVERRIDES: 'schedules/{0}/overrides'
       Role: !GetAtt ChatTopicRole.Arn
