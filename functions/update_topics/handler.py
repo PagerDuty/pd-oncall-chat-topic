@@ -10,14 +10,9 @@ from botocore.vendored import requests
 import boto3
 
 
-# semaphore limit of 5, picked this number arbitrarily
-maxthreads = 5
-sema = threading.Semaphore(value=maxthreads)
-
-logging.getLogger('boto3').setLevel(logging.CRITICAL)
-logging.getLogger('botocore').setLevel(logging.CRITICAL)
-logger = logging.getLogger()
-logger.setLevel(logging.DEBUG)
+MAX_THREADS = None
+SEMA = None
+LOGGER = None
 
 
 # Get the Current User on-call for a given schedule
@@ -42,7 +37,7 @@ def get_user(schedule_id):
     payload['until'] = now.isoformat()
     normal = requests.get(normal_url, headers=headers, params=payload)
     if normal.status_code == 404:
-        logger.critical("ABORT: Not a valid schedule: {}".format(schedule_id))
+        LOGGER.critical("ABORT: Not a valid schedule: {}".format(schedule_id))
         return False
     try:
         username = normal.json()['users'][0]['name']
@@ -57,7 +52,7 @@ def get_user(schedule_id):
     except IndexError:
         username = "No One :thisisfine:"
 
-    logger.info("Currently on call: {}".format(username))
+    LOGGER.info("Currently on call: {}".format(username))
     return username
 
 
@@ -72,8 +67,8 @@ def get_pd_schedule_name(schedule_id):
     try:
         return r.json()['schedule']['name']
     except KeyError:
-        logger.debug(r.status_code)
-        logger.debug(r.json())
+        LOGGER.debug(r.status_code)
+        LOGGER.debug(r.json())
         return None
 
 
@@ -86,14 +81,14 @@ def get_slack_topic(channel):
     try:
         r = requests.post('https://slack.com/api/conversations.info', data=payload)
         current = r.json()['channel']['topic']['value']
-        logger.debug("Current Topic: '{}'".format(current))
+        LOGGER.debug("Current Topic: '{}'".format(current))
     except KeyError:
-        logger.critical("Could not find '{}' on slack, has the on-call bot been removed from this channel?".format(channel))
+        LOGGER.critical("Could not find '{}' on slack, has the on-call bot been removed from this channel?".format(channel))
     return current
 
 
 def update_slack_topic(channel, proposed_update):
-    logger.debug("Entered update_slack_topic() with: {} {}".format(
+    LOGGER.debug("Entered update_slack_topic() with: {} {}".format(
         channel,
         proposed_update)
     )
@@ -147,9 +142,9 @@ def update_slack_topic(channel, proposed_update):
             topic = topic[0:247] + "..."
         payload['topic'] = topic
         r = requests.post('https://slack.com/api/conversations.setTopic', data=payload)
-        logger.debug("Response for '{}' was: {}".format(channel, r.json()))
+        LOGGER.debug("Response for '{}' was: {}".format(channel, r.json()))
     else:
-        logger.info("Not updating slack, topic is the same")
+        LOGGER.info("Not updating slack, topic is the same")
         return None
 
 
@@ -172,15 +167,15 @@ def figure_out_schedule(s):
         # This is fragile. fuzzy search may not do what you want
         sid = r.json()['schedules'][0]['id']
     except IndexError:
-        logger.debug("Schedule Not Found for: {}".format(s))
+        LOGGER.debug("Schedule Not Found for: {}".format(s))
         sid = None
     return sid
 
 
 def do_work(obj):
     # entrypoint of the thread
-    sema.acquire()
-    logger.debug("Operating on {}".format(obj))
+    SEMA.acquire()
+    LOGGER.debug("Operating on {}".format(obj))
     # schedule will ALWAYS be there, it is a ddb primarykey
     schedules = obj['schedule']['S']
     schedule_list = schedules.split(',')
@@ -191,7 +186,7 @@ def do_work(obj):
         if schedule:
             username = get_user(schedule)
         else:
-            logger.critical("Exiting: Schedule not found or not valid, see previous errors")
+            LOGGER.critical("Exiting: Schedule not found or not valid, see previous errors")
             return 127
         try:
             sched_names = (obj['sched_name']['S']).split(',')
@@ -219,15 +214,34 @@ def do_work(obj):
                 update_slack_topic(channel, topic)
         elif 'hipchat' in obj.keys():
             # hipchat = obj['hipchat']['S']
-            logger.critical("HipChat is not supported yet. Ignoring this entry...")
-    sema.release()
+            LOGGER.critical("HipChat is not supported yet. Ignoring this entry...")
+    SEMA.release()
+
+
+def init_threading():
+    global MAX_THREADS, SEMA
+    # semaphore limit of 5, picked this number arbitrarily
+    MAX_THREADS = 5
+    SEMA = threading.Semaphore(value=MAX_THREADS)
+    
+
+def init_logging():
+    global LOGGER
+    logging.getLogger('boto3').setLevel(logging.CRITICAL)
+    logging.getLogger('botocore').setLevel(logging.CRITICAL)
+    LOGGER = logging.getLogger()
+    LOGGER.setLevel(logging.DEBUG)
+
 
 def init_config():
     global PD_API_KEY
+    init_threading()
+    init_logging()
     # Fetch the PD API token from PD_API_KEY_NAME key in SSM
     PD_API_KEY = boto3.client('ssm').get_parameters(
         Names=[os.environ['PD_API_KEY_NAME']],
         WithDecryption=True)['Parameters'][0]['Value']
+
 
 def handler(event, context):
     print(event)
@@ -241,6 +255,3 @@ def handler(event, context):
     # Start threads and wait for all to finish
     [t.start() for t in threads]
     [t.join() for t in threads]
-
-def test123():
-    print('nice')
