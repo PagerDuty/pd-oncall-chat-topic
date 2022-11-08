@@ -1,6 +1,7 @@
 import pytest
 from dotenv import load_dotenv
 from pathlib import Path
+import os
 
 from functions.update_topics import handler
 from functions.update_topics.handler import EnvironmentVariableNotReadyError
@@ -11,11 +12,13 @@ DEV_ENV_PATH = '.env.dev'
 
 @pytest.fixture(autouse=True)
 def dev_config(mocker):
+    load_dotenv(dotenv_path=Path(DEV_ENV_PATH))
+
     # NOTE: We're mocking this function since it initates an internet connection
     #       under normal circumstances. 
-    mocker.patch('functions.update_topics.handler.init_pd_api_key', return_value=None)
+    PD_API_KEY = os.environ['PD_API_KEY']
+    mocker.patch('functions.update_topics.handler.load_pd_api_key', return_value=PD_API_KEY)
 
-    load_dotenv(dotenv_path=Path(DEV_ENV_PATH))
     handler.init_config()
 
 
@@ -54,6 +57,19 @@ def test_get_pdapi_schedule_overrides_route_environment_not_ready_PD_API_ROUTE_S
     with pytest.raises(EnvironmentVariableNotReadyError, match="^Variable 'PD_API_ROUTE_SCHEDULE_OVERRIDES'.*"):
         route = handler.get_pdapi_schedule_overrides_route('schedule_id')
 
+
+def test_get_pdapi_headers():
+    headers = handler.get_pdapi_headers()
+    assert 'Accept' in headers.keys()
+    assert 'application/vnd.pagerduty+json;version=2' == headers['Accept']
+    assert 'Authorization' in headers.keys()
+    assert 'Token token=myfakekey' == headers['Authorization']
+
+
+def test_get_pdapi_headers_environment_not_ready_PD_API_KEY():
+    handler.PD_API_KEY = None
+    with pytest.raises(EnvironmentVariableNotReadyError, match="^Variable 'PD_API_KEY'.*"):
+        headers = handler.get_pdapi_headers()
 
 def test_init_threading():
     handler.init_threading()

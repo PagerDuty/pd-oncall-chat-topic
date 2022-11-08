@@ -56,13 +56,22 @@ def get_pdapi_schedule_overrides_route(schedule_id):
     return route
 
 
-# Get the Current User on-call for a given schedule
-def get_user(schedule_id):
-    global PD_API_KEY
+def get_pdapi_headers():
+    # TODO: Add a dictionary argument and merge with headers for flexibility
+    if PD_API_KEY is None:
+        raise EnvironmentVariableNotReadyError('PD_API_KEY')
+
     headers = {
         'Accept': 'application/vnd.pagerduty+json;version=2',
         'Authorization': 'Token token={token}'.format(token=PD_API_KEY)
     }
+    return headers
+
+
+# Get the Current User on-call for a given schedule
+def get_user(schedule_id):
+    global PD_API_KEY
+    headers = get_pdapi_headers()
     normal_url = get_pdapi_schedule_users_route(schedule_id)
     override_url = get_pdapi_schedule_overrides_route(schedule_id)
     # This value should be less than the running interval
@@ -270,7 +279,7 @@ def init_logging():
     LOGGER.setLevel(logging.DEBUG)
 
 
-def init_pd_api_key():
+def load_pd_api_key():
     # Fetch the PD API token from PD_API_KEY_NAME key in SSM
     try:
         PD_API_KEY = boto3.client('ssm').get_parameters(
@@ -290,8 +299,7 @@ def init_config():
     PD_API_FQDN = os.environ.get('PD_API_FQDN')
     PD_API_ROUTE_SCHEDULE_USERS = os.environ.get('PD_API_ROUTE_SCHEDULE_USERS')
     PD_API_ROUTE_SCHEDULE_OVERRIDES = os.environ.get('PD_API_ROUTE_SCHEDULE_OVERRIDES')
-    
-    init_pd_api_key()
+    PD_API_KEY = load_pd_api_key()
 
 
 def handler(event, context):
