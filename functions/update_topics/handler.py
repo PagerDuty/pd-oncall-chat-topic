@@ -14,6 +14,7 @@ MAX_THREADS = None
 SEMA = None
 LOGGER = None
 
+PD_API_KEY = None
 
 # Get the Current User on-call for a given schedule
 def get_user(schedule_id):
