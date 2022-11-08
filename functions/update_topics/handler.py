@@ -286,15 +286,18 @@ def init_logging():
 
 
 def load_pd_api_key():
+    pd_api_key = None
+    
     # Fetch the PD API token from PD_API_KEY_NAME key in SSM
     try:
-        PD_API_KEY = boto3.client('ssm').get_parameters(
+        pd_api_key = boto3.client('ssm').get_parameters(
             Names=[os.environ['PD_API_KEY_NAME']],
             WithDecryption=True)['Parameters'][0]['Value']
     except NoRegionError:
-        PD_API_KEY = None
+        return None
         # TODO: Actually handle me
 
+    return pd_api_key
 
 def init_config():
     global PD_API_KEY, MAX_THREADS, PD_API_FQDN
