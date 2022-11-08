@@ -7,6 +7,7 @@ import logging
 import re
 
 from botocore.vendored import requests
+from botocore.exceptions import NoRegionError
 import boto3
 
 
@@ -19,6 +20,42 @@ PD_API_FQDN = None
 PD_API_ROUTE_SCHEDULE_USERS = None
 PD_API_ROUTE_SCHEDULE_OVERRIDES = None
 
+
+class EnvironmentVariableNotReadyError(Exception):
+    variable_name = None
+
+    """
+    Exception raised for errors using global variables mapped to environment
+    variables before they are ready.
+    """
+    def __init__(self, variable_name):
+        self.variable_name = variable_name
+        self.message = f"Variable '{variable_name}' is not instantiated! Invoke '{init_config.__name__}()' before use!"
+        super().__init__(self.message)
+
+
+def get_pdapi_schedule_users_route(schedule_id):
+    if PD_API_FQDN is None:
+        raise EnvironmentVariableNotReadyError('PD_API_FQDN')
+
+    if PD_API_ROUTE_SCHEDULE_USERS is None:
+        raise EnvironmentVariableNotReadyError('PD_API_ROUTE_SCHEDULE_USERS')
+
+    route = f"https://{PD_API_FQDN}/{PD_API_ROUTE_SCHEDULE_USERS}".format(schedule_id)
+    return route
+
+
+def get_pdapi_schedule_overrides_route(schedule_id):
+    if PD_API_FQDN is None:
+        raise EnvironmentVariableNotReadyError('PD_API_FQDN')
+
+    if PD_API_ROUTE_SCHEDULE_OVERRIDES is None:
+        raise EnvironmentVariableNotReadyError('PD_API_ROUTE_SCHEDULE_OVERRIDES')
+    
+    route = f"https://{PD_API_FQDN}/{PD_API_ROUTE_SCHEDULE_OVERRIDES}".format(schedule_id)
+    return route
+
+
 # Get the Current User on-call for a given schedule
 def get_user(schedule_id):
     global PD_API_KEY
@@ -26,12 +63,8 @@ def get_user(schedule_id):
         'Accept': 'application/vnd.pagerduty+json;version=2',
         'Authorization': 'Token token={token}'.format(token=PD_API_KEY)
     }
-    normal_url = 'https://api.pagerduty.com/schedules/{0}/users'.format(
-        schedule_id
-    )
-    override_url = 'https://api.pagerduty.com/schedules/{0}/overrides'.format(
-        schedule_id
-    )
+    normal_url = get_pdapi_schedule_users_route(schedule_id)
+    override_url = get_pdapi_schedule_overrides_route(schedule_id)
     # This value should be less than the running interval
     # It is best to use UTC for the datetime object
     now = datetime.now(timezone.utc)
@@ -238,13 +271,23 @@ def init_logging():
 
 
 def init_config():
-    global PD_API_KEY
+    global PD_API_KEY, MAX_THREADS, PD_API_FQDN, PD_API_ROUTE_SCHEDULE_USERS, PD_API_ROUTE_SCHEDULE_OVERRIDES
+
     init_threading()
     init_logging()
+
+    MAX_THREADS = os.environ.get('MAX_THREADS')
+    PD_API_FQDN = os.environ.get('PD_API_FQDN')
+    PD_API_ROUTE_SCHEDULE_USERS = os.environ.get('PD_API_ROUTE_SCHEDULE_USERS')
+    PD_API_ROUTE_SCHEDULE_OVERRIDES = os.environ.get('PD_API_ROUTE_SCHEDULE_OVERRIDES')
+    
     # Fetch the PD API token from PD_API_KEY_NAME key in SSM
-    PD_API_KEY = boto3.client('ssm').get_parameters(
-        Names=[os.environ['PD_API_KEY_NAME']],
-        WithDecryption=True)['Parameters'][0]['Value']
+    try:
+        PD_API_KEY = boto3.client('ssm').get_parameters(
+            Names=[os.environ['PD_API_KEY_NAME']],
+            WithDecryption=True)['Parameters'][0]['Value']
+    except NoRegionError:
+        PD_API_KEY = None
 
 
 def handler(event, context):
