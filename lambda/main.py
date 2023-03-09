@@ -46,7 +46,7 @@ def get_user(schedule_id):
         logger.critical("ABORT: Not a valid schedule: {}".format(schedule_id))
         return False
     try:
-        username = schedule.json()['final_schedule']['rendered_schedule_entries'][0]['users']['summary']
+        username = schedule.json()['final_schedule']['rendered_schedule_entries'][0]['user']['summary']
         # Check if the current user is on-call due to an override
         if schedule.json()['overrides_subschedule']['rendered_schedule_entries']:  # is not empty list
             username = username + " (Override)"
