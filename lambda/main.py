@@ -211,21 +211,3 @@ def do_work(obj):
             logger.critical("HipChat is not supported yet. Ignoring this entry...")
     sema.release()
 
-
-def handler(event, context):
-    print(event)
-    ddb = boto3.client('dynamodb')
-    response = ddb.scan(TableName=os.environ['CONFIG_TABLE'])
-    threads = []
-    for i in response['Items']:
-        thread = threading.Thread(target=do_work, args=(i,))
-        threads.append(thread)
-    # Start threads and wait for all to finish
-    [t.start() for t in threads]
-    [t.join() for t in threads]
-
-#cambiar codifgo para prueba
-def do_work(
-        ddb, table, schedule, slack, hipchat, sched_name, username, topic
-    ):
-    
