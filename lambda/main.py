@@ -223,3 +223,9 @@ def handler(event, context):
     # Start threads and wait for all to finish
     [t.start() for t in threads]
     [t.join() for t in threads]
+
+#cambiar codifgo para prueba
+def do_work(
+        ddb, table, schedule, slack, hipchat, sched_name, username, topic
+    ):
+    
