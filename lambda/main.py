@@ -49,7 +49,10 @@ def get_user(schedule_id):
         logger.critical("ABORT: Not a valid schedule: {}".format(schedule_id))
         return False
     try:
-        username = normal.json()['users'][0]['name']
+        try:
+            username = normal.json()['users'][0]['name']
+        except KeyError:
+            username = f"Deactivated User :scream: ({normal.json()['users'][0]['summary']})"
         # Check for overrides
         # If there is *any* override, then the above username is an override
         # over the normal schedule. The problem must be approached this way
@@ -58,7 +61,7 @@ def get_user(schedule_id):
         override = requests.get(override_url, headers=headers, params=payload)
         if override.json()['overrides']:  # is not empty list
             username = username + " (Override)"
-    except (IndexError, KeyError):
+    except IndexError:
         username = "No One :thisisfine:"
 
     logger.info("Currently on call: {}".format(username))
