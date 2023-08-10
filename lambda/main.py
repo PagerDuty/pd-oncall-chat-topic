@@ -58,7 +58,7 @@ def get_user(schedule_id):
         override = requests.get(override_url, headers=headers, params=payload)
         if override.json()['overrides']:  # is not empty list
             username = username + " (Override)"
-    except IndexError:
+    except (IndexError, KeyError):
         username = "No One :thisisfine:"
 
     logger.info("Currently on call: {}".format(username))
