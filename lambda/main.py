@@ -60,6 +60,8 @@ def get_user(schedule_id):
             username = username + " (Override)"
     except IndexError:
         username = "No One :thisisfine:"
+    except KeyError:
+        username = f"Deactivated User :scream: ({normal.json()['users'][0]['summary']})"
 
     logger.info("Currently on call: {}".format(username))
     return username
