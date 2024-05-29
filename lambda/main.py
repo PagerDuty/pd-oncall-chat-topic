@@ -7,13 +7,13 @@ import logging
 import re
 
 import json
-import urllib3
+from urllib3 import PoolManager
 import boto3
 
 # semaphore limit of 5, picked this number arbitrarily
 maxthreads = 5
 sema = threading.Semaphore(value=maxthreads)
-http = urllib3.PoolManager()
+http = PoolManager()
 
 logging.getLogger('boto3').setLevel(logging.CRITICAL)
 logging.getLogger('botocore').setLevel(logging.CRITICAL)
