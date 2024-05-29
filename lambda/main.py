@@ -6,12 +6,13 @@ import threading
 import logging
 import re
 
-import requests
+import urllib3
 import boto3
 
 # semaphore limit of 5, picked this number arbitrarily
 maxthreads = 5
 sema = threading.Semaphore(value=maxthreads)
+http = urllib3.PoolManager()
 
 logging.getLogger('boto3').setLevel(logging.CRITICAL)
 logging.getLogger('botocore').setLevel(logging.CRITICAL)
@@ -44,7 +45,7 @@ def get_user(schedule_id):
     payload = {}
     payload['since'] = since.isoformat()
     payload['until'] = now.isoformat()
-    normal = requests.get(normal_url, headers=headers, params=payload)
+    normal = http.request('GET', normal_url, headers=headers, params=payload)
     if normal.status_code == 404:
         logger.critical("ABORT: Not a valid schedule: {}".format(schedule_id))
         return False
@@ -55,7 +56,7 @@ def get_user(schedule_id):
         # over the normal schedule. The problem must be approached this way
         # because the /overrides endpoint does not guarentee an order of the
         # output.
-        override = requests.get(override_url, headers=headers, params=payload)
+        override = http.request('GET', override_url, headers=headers, params=payload)
         if override.json()['overrides']:  # is not empty list
             username = username + " (Override)"
     except IndexError:
@@ -74,7 +75,7 @@ def get_pd_schedule_name(schedule_id):
         'Authorization': 'Token token={token}'.format(token=PD_API_KEY)
     }
     url = 'https://api.pagerduty.com/schedules/{0}'.format(schedule_id)
-    r = requests.get(url, headers=headers)
+    r = http.request('GET', url, headers=headers)
     try:
         return r.json()['schedule']['name']
     except KeyError:
@@ -90,7 +91,7 @@ def get_slack_topic(channel):
         WithDecryption=True)['Parameters'][0]['Value']
     payload['channel'] = channel
     try:
-        r = requests.post('https://slack.com/api/conversations.info', data=payload)
+        r = http.request('POST', 'https://slack.com/api/conversations.info', data=payload)
         current = r.json()['channel']['topic']['value']
         logger.debug("Current Topic: '{}'".format(current))
     except KeyError:
@@ -153,7 +154,7 @@ def update_slack_topic(channel, proposed_update):
         if len(topic) > 250:
             topic = topic[0:247] + "..."
         payload['topic'] = topic
-        r = requests.post('https://slack.com/api/conversations.setTopic', data=payload)
+        r = http.request('POST', 'https://slack.com/api/conversations.setTopic', data=payload)
         logger.debug("Response for '{}' was: {}".format(channel, r.json()))
     else:
         logger.info("Not updating slack, topic is the same")
@@ -174,7 +175,7 @@ def figure_out_schedule(s):
     payload = {}
     payload['query'] = s
     # If there is no override, then check the schedule directly
-    r = requests.get(url, headers=headers, params=payload)
+    r = http.request('GET', url, headers=headers, params=payload)
     try:
         # This is fragile. fuzzy search may not do what you want
         sid = r.json()['schedules'][0]['id']
