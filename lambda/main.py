@@ -98,7 +98,7 @@ def get_slack_topic(channel):
         WithDecryption=True)['Parameters'][0]['Value']
     payload['channel'] = channel
     try:
-        response = http.request('POST', 'https://slack.com/api/conversations.info', data=payload)
+        response = http.request('POST', 'https://slack.com/api/conversations.info', fields=payload)
         body = response.data.decode('utf-8')
         r = json.loads(body)
         current = r.json()['channel']['topic']['value']
@@ -163,7 +163,7 @@ def update_slack_topic(channel, proposed_update):
         if len(topic) > 250:
             topic = topic[0:247] + "..."
         payload['topic'] = topic
-        response = http.request('POST', 'https://slack.com/api/conversations.setTopic', data=payload)
+        response = http.request('POST', 'https://slack.com/api/conversations.setTopic', fields=payload)
         body = response.data.decode('utf-8')
         r = json.loads(body)
         logger.debug("Response for '{}' was: {}".format(channel, r.json()))
