@@ -46,7 +46,7 @@ def get_user(schedule_id):
     payload = {}
     payload['since'] = since.isoformat()
     payload['until'] = now.isoformat()
-    response = http.request('GET', normal_url, headers=headers, params=payload)
+    response = http.request('GET', normal_url, headers=headers, fields=payload)
     body = response.data.decode('utf-8')
     normal = json.loads(body)
     if normal.status_code == 404:
@@ -59,7 +59,7 @@ def get_user(schedule_id):
         # over the normal schedule. The problem must be approached this way
         # because the /overrides endpoint does not guarentee an order of the
         # output.
-        override_response = http.request('GET', override_url, headers=headers, params=payload)
+        override_response = http.request('GET', override_url, headers=headers, fields=payload)
         body = override_response.data.decode('utf-8')
         override = json.loads(body)
         if override.json()['overrides']:  # is not empty list
@@ -186,7 +186,7 @@ def figure_out_schedule(s):
     payload = {}
     payload['query'] = s
     # If there is no override, then check the schedule directly
-    response = http.request('GET', url, headers=headers, params=payload)
+    response = http.request('GET', url, headers=headers, fields=payload)
     body = response.data.decode('utf-8')
     r = json.loads(body)
     try:
