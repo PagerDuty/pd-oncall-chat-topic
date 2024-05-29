@@ -62,12 +62,12 @@ def get_user(schedule_id):
         override_response = http.request('GET', override_url, headers=headers, fields=payload)
         body = override_response.data.decode('utf-8')
         override = json.loads(body)
-        if override.json()['overrides']:  # is not empty list
+        if override['overrides']:  # is not empty list
             username = username + " (Override)"
     except IndexError:
         username = "No One :thisisfine:"
     except KeyError:
-        username = f"Deactivated User :scream: ({normal.json()['users'][0]['summary']})"
+        username = f"Deactivated User :scream: ({normal['users'][0]['summary']})"
 
     logger.info("Currently on call: {}".format(username))
     return username
@@ -101,7 +101,7 @@ def get_slack_topic(channel):
         response = http.request('POST', 'https://slack.com/api/conversations.info', fields=payload)
         body = response.data.decode('utf-8')
         r = json.loads(body)
-        current = r.json()['channel']['topic']['value']
+        current = r['channel']['topic']['value']
         logger.debug("Current Topic: '{}'".format(current))
     except KeyError:
         logger.critical("Could not find '{}' on slack, has the on-call bot been removed from this channel?".format(channel))
@@ -166,7 +166,7 @@ def update_slack_topic(channel, proposed_update):
         response = http.request('POST', 'https://slack.com/api/conversations.setTopic', fields=payload)
         body = response.data.decode('utf-8')
         r = json.loads(body)
-        logger.debug("Response for '{}' was: {}".format(channel, r.json()))
+        logger.debug("Response for '{}' was: {}".format(channel, r))
     else:
         logger.info("Not updating slack, topic is the same")
         return None
@@ -191,7 +191,7 @@ def figure_out_schedule(s):
     r = json.loads(body)
     try:
         # This is fragile. fuzzy search may not do what you want
-        sid = r.json()['schedules'][0]['id']
+        sid = r['schedules'][0]['id']
     except IndexError:
         logger.debug("Schedule Not Found for: {}".format(s))
         sid = None
