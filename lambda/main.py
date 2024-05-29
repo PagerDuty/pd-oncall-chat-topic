@@ -48,12 +48,12 @@ def get_user(schedule_id):
     payload['until'] = now.isoformat()
     response = http.request('GET', normal_url, headers=headers, fields=payload)
     body = response.data.decode('utf-8')
-    normal = json.loads(body)
-    if normal.status_code == 404:
+    if response.status == 404:
         logger.critical("ABORT: Not a valid schedule: {}".format(schedule_id))
         return False
+    normal = json.loads(body)
     try:
-        username = normal.json()['users'][0]['name']
+        username = normal['users'][0]['name']
         # Check for overrides
         # If there is *any* override, then the above username is an override
         # over the normal schedule. The problem must be approached this way
@@ -84,10 +84,10 @@ def get_pd_schedule_name(schedule_id):
     body = response.data.decode('utf-8')
     r = json.loads(body)
     try:
-        return r.json()['schedule']['name']
+        return r.['schedule']['name']
     except KeyError:
-        logger.debug(r.status_code)
-        logger.debug(r.json())
+        logger.debug(response.status)
+        logger.debug(r)
         return None
 
 
