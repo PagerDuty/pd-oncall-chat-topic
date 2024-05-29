@@ -84,7 +84,7 @@ def get_pd_schedule_name(schedule_id):
     body = response.data.decode('utf-8')
     r = json.loads(body)
     try:
-        return r.['schedule']['name']
+        return r['schedule']['name']
     except KeyError:
         logger.debug(response.status)
         logger.debug(r)
