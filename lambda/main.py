@@ -6,12 +6,14 @@ import threading
 import logging
 import re
 
-from botocore.vendored import requests
+import json
+from urllib3 import PoolManager
 import boto3
 
 # semaphore limit of 5, picked this number arbitrarily
 maxthreads = 5
 sema = threading.Semaphore(value=maxthreads)
+http = PoolManager()
 
 logging.getLogger('boto3').setLevel(logging.CRITICAL)
 logging.getLogger('botocore').setLevel(logging.CRITICAL)
@@ -44,24 +46,28 @@ def get_user(schedule_id):
     payload = {}
     payload['since'] = since.isoformat()
     payload['until'] = now.isoformat()
-    normal = requests.get(normal_url, headers=headers, params=payload)
-    if normal.status_code == 404:
+    response = http.request('GET', normal_url, headers=headers, fields=payload)
+    body = response.data.decode('utf-8')
+    if response.status == 404:
         logger.critical("ABORT: Not a valid schedule: {}".format(schedule_id))
         return False
+    normal = json.loads(body)
     try:
-        username = normal.json()['users'][0]['name']
+        username = normal['users'][0]['name']
         # Check for overrides
         # If there is *any* override, then the above username is an override
         # over the normal schedule. The problem must be approached this way
         # because the /overrides endpoint does not guarentee an order of the
         # output.
-        override = requests.get(override_url, headers=headers, params=payload)
-        if override.json()['overrides']:  # is not empty list
+        override_response = http.request('GET', override_url, headers=headers, fields=payload)
+        body = override_response.data.decode('utf-8')
+        override = json.loads(body)
+        if override['overrides']:  # is not empty list
             username = username + " (Override)"
     except IndexError:
         username = "No One :thisisfine:"
     except KeyError:
-        username = f"Deactivated User :scream: ({normal.json()['users'][0]['summary']})"
+        username = f"Deactivated User :scream: ({normal['users'][0]['summary']})"
 
     logger.info("Currently on call: {}".format(username))
     return username
@@ -74,12 +80,14 @@ def get_pd_schedule_name(schedule_id):
         'Authorization': 'Token token={token}'.format(token=PD_API_KEY)
     }
     url = 'https://api.pagerduty.com/schedules/{0}'.format(schedule_id)
-    r = requests.get(url, headers=headers)
+    response = http.request('GET', url, headers=headers)
+    body = response.data.decode('utf-8')
+    r = json.loads(body)
     try:
-        return r.json()['schedule']['name']
+        return r['schedule']['name']
     except KeyError:
-        logger.debug(r.status_code)
-        logger.debug(r.json())
+        logger.debug(response.status)
+        logger.debug(r)
         return None
 
 
@@ -90,8 +98,10 @@ def get_slack_topic(channel):
         WithDecryption=True)['Parameters'][0]['Value']
     payload['channel'] = channel
     try:
-        r = requests.post('https://slack.com/api/conversations.info', data=payload)
-        current = r.json()['channel']['topic']['value']
+        response = http.request('POST', 'https://slack.com/api/conversations.info', fields=payload)
+        body = response.data.decode('utf-8')
+        r = json.loads(body)
+        current = r['channel']['topic']['value']
         logger.debug("Current Topic: '{}'".format(current))
     except KeyError:
         logger.critical("Could not find '{}' on slack, has the on-call bot been removed from this channel?".format(channel))
@@ -153,8 +163,10 @@ def update_slack_topic(channel, proposed_update):
         if len(topic) > 250:
             topic = topic[0:247] + "..."
         payload['topic'] = topic
-        r = requests.post('https://slack.com/api/conversations.setTopic', data=payload)
-        logger.debug("Response for '{}' was: {}".format(channel, r.json()))
+        response = http.request('POST', 'https://slack.com/api/conversations.setTopic', fields=payload)
+        body = response.data.decode('utf-8')
+        r = json.loads(body)
+        logger.debug("Response for '{}' was: {}".format(channel, r))
     else:
         logger.info("Not updating slack, topic is the same")
         return None
@@ -174,10 +186,12 @@ def figure_out_schedule(s):
     payload = {}
     payload['query'] = s
     # If there is no override, then check the schedule directly
-    r = requests.get(url, headers=headers, params=payload)
+    response = http.request('GET', url, headers=headers, fields=payload)
+    body = response.data.decode('utf-8')
+    r = json.loads(body)
     try:
         # This is fragile. fuzzy search may not do what you want
-        sid = r.json()['schedules'][0]['id']
+        sid = r['schedules'][0]['id']
     except IndexError:
         logger.debug("Schedule Not Found for: {}".format(s))
         sid = None
