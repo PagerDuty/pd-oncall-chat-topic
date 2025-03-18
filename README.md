@@ -22,12 +22,19 @@ employees to build and present projects or ideas that fulfill some kind of need
 at the company.
 
 ## How to Deploy
-1. Create an Integrated Bot that you can invite to your channel. https://my.slack.com/services/new/bot
+1. [Create](https://api.slack.com/quickstart) a Slack App and
+  - Configure the App with Bot Token Scopes required for public channels:
+    - `channels:read` -- View basic information about public channels in a workspace
+    - `channels:write.topic` -- Set the description of public channels
+  - [Optional] Configure the App with Bot Token Scopes required for private channels:
+    - `groups:read` -- View basic information about private channels that your slack app has been added to
+    - `groups:write.topic` -- Set the description of private channels
+  - Add the App to the channel(s) that need topic updates
 2. Obtain a PagerDuty API Key (v2) [Directions Here](https://support.pagerduty.com/docs/using-the-api#section-generating-an-api-key)
 3. Deploy CloudFormation
   - Clone repo
   - Modify 2 variables for your AWS Environment
-    ([Makefile#L1-L2](https://github.com/PagerDuty/pd-oncall-chat-topic/blob/master/Makefile#L1-L2))
+    ([Makefile#L3-L6](https://github.com/PagerDuty/pd-oncall-chat-topic/blob/master/Makefile#L3-L6))
   - `make deploy`
 4. Write API Keys to EC2 SSM Parameter Store.
   - The lambda function expects certain key names by default so the following

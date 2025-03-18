@@ -5,7 +5,7 @@
 # $2 is the stack name
 # $3 is the region
 
-read -sp "API Key (not eched to terminal): " passwd; echo
+read -sp "API Key (not echoed to terminal): " passwd; echo
 
 aws ssm --region ${3} \
     put-parameter --name ${1} \
