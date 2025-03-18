@@ -90,13 +90,11 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       Handler: main.handler
-      Runtime: python3.8
+      Runtime: python3.12
       Timeout: 120
       CodeUri:
         Bucket: !Ref Bucket
         Key: !Ref md5
-      Layers:
-        - arn:aws:lambda:ca-central-1:778625758767:layer:AWSLambda-Python-AWS-SDK:4 # for ca-central-1 region
       Environment:
         Variables:
           PD_API_KEY_NAME: !Ref PDSSMKeyName
