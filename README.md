@@ -26,6 +26,7 @@ at the company.
   - Configure the App with Bot Token Scopes required for public channels:
     - `channels:read` -- View basic information about public channels in a workspace
     - `channels:write.topic` -- Set the description of public channels
+    - `users:read.email` -- View email addresses of people in a workspace (for Slack handle lookups)
   - [Optional] Configure the App with Bot Token Scopes required for private channels:
     - `groups:read` -- View basic information about private channels that your slack app has been added to
     - `groups:write.topic` -- Set the description of private channels
@@ -56,7 +57,12 @@ at the company.
   (where `schedule` is the PagerDuty Schedule ID, and `slack` is the Slack
   Channel ID. You can have a space-separated list of channels. `sched_name` is optional and if omitted will be looked up)
   If you have a split on-call rotation, you may place multiple comma-separated schedules and schedule names.
-  
+
+
+## Features
+- **Automatic Slack Handle Resolution**: The lambda now attempts to resolve PagerDuty user email addresses to Slack user handles (e.g., `<@U123456>`) for better notification integration. If email lookup fails or no email is available, it falls back to displaying the username.
+- **Multiple Schedule Support**: Support for comma-separated schedules in a single configuration entry.
+- **Flexible Topic Updates**: Updates Slack channel topics with current on-call information from PagerDuty schedules.
 
 ## Architecture
 The main part of this infrastructure is an AWS Lambda Function that operates on
