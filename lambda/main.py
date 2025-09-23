@@ -26,6 +26,38 @@ PD_API_KEY = boto3.client('ssm').get_parameters(
     WithDecryption=True)['Parameters'][0]['Value']
 
 
+def get_slack_handle(user_email):
+    """
+    Look up a Slack user handle by email address.
+    Returns a formatted Slack mention (<@USER_ID>) if successful, None otherwise.
+    """
+    if not user_email:
+        logger.debug("No email provided for Slack handle lookup")
+        return None
+
+    payload = {}
+    payload['token'] = boto3.client('ssm').get_parameters(
+        Names=[os.environ['SLACK_API_KEY_NAME']],
+        WithDecryption=True)['Parameters'][0]['Value']
+    payload['email'] = user_email
+
+    try:
+        response = http.request('POST', 'https://slack.com/api/users.lookupByEmail', fields=payload)
+        body = response.data.decode('utf-8')
+        data = json.loads(body)
+
+        if data.get('ok') and 'user' in data and 'id' in data['user']:
+            slack_handle = f"<@{data['user']['id']}>"
+            return slack_handle
+        else:
+            error_msg = data.get('error', 'Unknown error')
+            logger.warning(f"Failed to get Slack handle for {user_email}: {error_msg}")
+            return None
+
+    except Exception as e:
+        logger.error(f"Error looking up Slack handle for {user_email}: {e}")
+        return None
+
 # Get the Current User on-call for a given schedule
 def get_user(schedule_id):
     global PD_API_KEY
@@ -54,6 +86,7 @@ def get_user(schedule_id):
     normal = json.loads(body)
     try:
         username = normal['users'][0]['name']
+        email = normal['users'][0]['email']
         # Check for overrides
         # If there is *any* override, then the above username is an override
         # over the normal schedule. The problem must be approached this way
@@ -70,7 +103,7 @@ def get_user(schedule_id):
         username = f"Deactivated User :scream: ({normal['users'][0]['summary']})"
 
     logger.info("Currently on call: {}".format(username))
-    return username
+    return { "username": username, "email": email }
 
 
 def get_pd_schedule_name(schedule_id):
@@ -206,21 +239,47 @@ def do_work(obj):
     schedules = obj['schedule']['S']
     schedule_list = schedules.split(',')
     oncall_dict = {}
+    email = ""
     for schedule in schedule_list:  #schedule can now be a whitespace separated 'list' in a string
         schedule = figure_out_schedule(schedule)
 
         if schedule:
-            username = get_user(schedule)
+            user_info = get_user(schedule)
+            if user_info and isinstance(user_info, dict):
+                username = user_info['username']
+                email = user_info.get('email')
+
+                # Try to get Slack handle using email, fall back to username
+                if email:
+                    slack_handle = get_slack_handle(email)
+                    if slack_handle:
+                        display_name = slack_handle
+                        logger.info(f"Using Slack handle {slack_handle} for {username}")
+                    else:
+                        display_name = username
+                        logger.info(f"Using username {username} (Slack handle lookup failed)")
+                else:
+                    display_name = username
+                    logger.info(f"Using username {username} (no email available)")
+            else:
+                logger.critical("Could not get user info for schedule: {}".format(schedule))
+                sema.release()
+                return 127
         else:
             logger.critical("Exiting: Schedule not found or not valid, see previous errors")
+            sema.release()
             return 127
         try:
             sched_names = (obj['sched_name']['S']).split(',')
             sched_name = sched_names[schedule_list.index(schedule)] #We want the schedule name in the same position as the schedule we're using
         except:
             sched_name = get_pd_schedule_name(schedule)
-        oncall_dict[username] = sched_name
 
+        # Handle multiple schedules for the same user
+        if display_name in oncall_dict:
+            oncall_dict[display_name] += f", {sched_name}"
+        else:
+            oncall_dict[display_name] = sched_name
     if oncall_dict:  # then it is valid and update the chat topic
         topic = ""
         i = 0
