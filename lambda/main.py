@@ -131,7 +131,7 @@ def update_slack_topic(channel, proposed_update):
     current_full_topic = re.sub(r'<(?:!subteam\^[A-Z0-9|]*)([@A-Za-z-]*)>', r'\1',
             current_full_topic)
     # Also handle Slack Channels in the same way as above
-    current_full_topic = re.sub(r'<(?:#[A-Z0-9|]*)([@A-Za-z-]*)>', r'#\1',
+    current_full_topic = re.sub(r'<(?:#[A-Z0-9|]*)([@A-Za-z0-9_-]*)>', r'#\1',
             current_full_topic)
 
     if current_full_topic:
