@@ -54,15 +54,16 @@ def get_user(schedule_id):
     normal = json.loads(body)
     try:
         username = normal['users'][0]['name']
-        # Check for overrides
-        # If there is *any* override, then the above username is an override
-        # over the normal schedule. The problem must be approached this way
-        # because the /overrides endpoint does not guarentee an order of the
-        # output.
+        # Check for overrides active at the current moment
         override_response = http.request('GET', override_url, headers=headers, fields=payload)
         body = override_response.data.decode('utf-8')
         override = json.loads(body)
-        if override['overrides']:  # is not empty list
+        now_iso = now.isoformat()
+        active_overrides = [
+            o for o in override['overrides']
+            if o['start'] <= now_iso < o['end']
+        ]
+        if active_overrides:
             username = username + " (Override)"
     except IndexError:
         username = "No One :thisisfine:"
