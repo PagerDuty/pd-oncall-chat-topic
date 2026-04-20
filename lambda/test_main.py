@@ -60,6 +60,7 @@ class TestGetUser(unittest.TestCase):
         def _call(self, users, overrides, now=NOW):
             with patch('main.http') as mock_http, patch('main.datetime') as mock_dt:
                 mock_dt.now.return_value = now
+                mock_dt.fromisoformat.side_effect = datetime.fromisoformat
                 mock_http.request.side_effect = [
                     _resp({'users': users}),
                     _resp({'overrides': overrides}),
@@ -96,6 +97,15 @@ class TestGetUser(unittest.TestCase):
                 {'start': '2024-06-01T10:00:00+00:00', 'end': '2024-06-01T11:00:00+00:00'},
             ]
             self.assertEqual(self._call([{'name': 'Frank'}], overrides), 'Frank')
+
+        def test_appends_label_when_override_uses_zulu_timezone(self):
+            override = {'start': '2024-06-01T11:00:00Z', 'end': '2024-06-01T13:00:00Z'}
+            self.assertEqual(self._call([{'name': 'Grace'}], [override]), 'Grace (Override)')
+
+        def test_appends_label_when_override_uses_eastern_time(self):
+            # NOW is 12:00 UTC = 08:00 EDT; override runs 07:00–09:00 EDT
+            override = {'start': '2024-06-01T07:00:00-04:00', 'end': '2024-06-01T09:00:00-04:00'}
+            self.assertEqual(self._call([{'name': 'Heidi'}], [override]), 'Heidi (Override)')
 
 
 def load_tests(loader, tests, pattern):

@@ -26,6 +26,10 @@ PD_API_KEY = boto3.client('ssm').get_parameters(
     WithDecryption=True)['Parameters'][0]['Value']
 
 
+def parse_dt(s):
+    return datetime.fromisoformat(s.replace('Z', '+00:00'))
+
+
 # Get the Current User on-call for a given schedule
 def get_user(schedule_id):
     global PD_API_KEY
@@ -58,10 +62,9 @@ def get_user(schedule_id):
         override_response = http.request('GET', override_url, headers=headers, fields=payload)
         body = override_response.data.decode('utf-8')
         override = json.loads(body)
-        now_iso = now.isoformat()
         active_overrides = [
             o for o in override['overrides']
-            if o['start'] <= now_iso < o['end']
+            if parse_dt(o['start']) <= now < parse_dt(o['end'])
         ]
         if active_overrides:
             username = username + " (Override)"
