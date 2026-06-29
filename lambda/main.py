@@ -20,8 +20,8 @@ logging.getLogger('botocore').setLevel(logging.CRITICAL)
 logger = logging.getLogger()
 logger.setLevel(logging.DEBUG)
 
-# Fetch the PD API token from PD_API_KEY_NAME key in SSM
-PD_API_KEY = boto3.client('ssm').get_parameters(
+# Fetch the PD API token. PAGERDUTY_API_KEY env var bypasses SSM for testing.
+PD_API_KEY = os.environ.get('PAGERDUTY_API_KEY') or boto3.client('ssm').get_parameters(
     Names=[os.environ['PD_API_KEY_NAME']],
     WithDecryption=True)['Parameters'][0]['Value']
 
