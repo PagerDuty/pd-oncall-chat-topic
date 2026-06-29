@@ -29,6 +29,61 @@ class TestImport(unittest.TestCase):
         self.assertTrue(hasattr(main, 'get_pd_schedule_name'))
 
 
+class TestGetUserV3(unittest.TestCase):
+    def _v3_response(self, assignments):
+        return _mock_response(200, {
+            'schedule': {
+                'final_schedule': {
+                    'computed_shift_assignments': assignments
+                }
+            }
+        })
+
+    def test_returns_username_for_shift_based_schedule(self):
+        assignment = {
+            'member': {'type': 'user_member', 'user_id': 'PUSER01'},
+            'source': {'type': 'schedule_rotation'}
+        }
+        with patch.object(main.http, 'request') as mock_req, \
+             patch.object(main, 'get_user_name', return_value='Alice Example'):
+            mock_req.return_value = self._v3_response([assignment])
+            result = main.get_user_v3('PSHIFT1')
+        self.assertEqual(result, 'Alice Example')
+
+    def test_appends_override_when_source_is_override(self):
+        assignment = {
+            'member': {'type': 'user_member', 'user_id': 'PUSER02'},
+            'source': {'type': 'schedule_rotation_override'}
+        }
+        with patch.object(main.http, 'request') as mock_req, \
+             patch.object(main, 'get_user_name', return_value='Bob Example'):
+            mock_req.return_value = self._v3_response([assignment])
+            result = main.get_user_v3('PSHIFT1')
+        self.assertEqual(result, 'Bob Example (Override)')
+
+    def test_returns_no_one_when_empty_member(self):
+        assignment = {
+            'member': {'type': 'empty_member'},
+            'source': {'type': 'schedule_rotation'}
+        }
+        with patch.object(main.http, 'request') as mock_req:
+            mock_req.return_value = self._v3_response([assignment])
+            result = main.get_user_v3('PSHIFT1')
+        self.assertEqual(result, 'No One :thisisfine:')
+
+    def test_returns_none_for_non_shift_based_schedule(self):
+        with patch.object(main.http, 'request') as mock_req:
+            mock_req.return_value = _mock_response(400, {'error': {'code': 3005}})
+            result = main.get_user_v3('PLAYER1')
+        self.assertIsNone(result)
+
+    def test_returns_false_for_invalid_schedule(self):
+        with patch.object(main.http, 'request') as mock_req:
+            mock_req.return_value = _mock_response(404, {})
+            result = main.get_user_v3('PBOGUS1')
+        self.assertFalse(result)
+
+
 class TestGetUserName(unittest.TestCase):
     def test_returns_name(self):
         with patch.object(main.http, 'request') as mock_req:
