@@ -73,6 +73,49 @@ def get_user(schedule_id):
     return username
 
 
+def get_user_v3(schedule_id):
+    global PD_API_KEY
+    headers = {
+        'Accept': 'application/vnd.pagerduty+json;version=2',
+        'Authorization': 'Token token={token}'.format(token=PD_API_KEY)
+    }
+    now = datetime.now(timezone.utc)
+    since = now - timedelta(minutes=1)
+    payload = {
+        'since': since.isoformat(),
+        'until': now.isoformat(),
+        'include[]': 'final_schedule',
+    }
+    response = http.request(
+        'GET',
+        'https://api.pagerduty.com/v3/schedules/{0}'.format(schedule_id),
+        headers=headers,
+        fields=payload
+    )
+    if response.status == 400:
+        return None  # not a shift-based schedule
+    if response.status == 404:
+        logger.critical("ABORT: Not a valid schedule: {}".format(schedule_id))
+        return False
+
+    body = json.loads(response.data.decode('utf-8'))
+    assignments = (
+        body.get('schedule', {})
+            .get('final_schedule', {})
+            .get('computed_shift_assignments', [])
+    )
+
+    active = [a for a in assignments if a['member']['type'] == 'user_member']
+    if not active:
+        return 'No One :thisisfine:'
+
+    assignment = active[0]
+    username = get_user_name(assignment['member']['user_id'])
+    if assignment.get('source', {}).get('type', '').endswith('_override'):
+        username += ' (Override)'
+    return username
+
+
 def get_user_name(user_id):
     global PD_API_KEY
     headers = {
