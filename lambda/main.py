@@ -73,6 +73,19 @@ def get_user(schedule_id):
     return username
 
 
+def get_user_name(user_id):
+    global PD_API_KEY
+    headers = {
+        'Accept': 'application/vnd.pagerduty+json;version=2',
+        'Authorization': 'Token token={token}'.format(token=PD_API_KEY)
+    }
+    response = http.request('GET', 'https://api.pagerduty.com/users/{0}'.format(user_id), headers=headers)
+    try:
+        return json.loads(response.data.decode('utf-8'))['user']['name']
+    except (KeyError, ValueError):
+        return user_id
+
+
 def get_pd_schedule_name(schedule_id):
     global PD_API_KEY
     headers = {
