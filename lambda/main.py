@@ -20,25 +20,28 @@ logging.getLogger('botocore').setLevel(logging.CRITICAL)
 logger = logging.getLogger()
 logger.setLevel(logging.DEBUG)
 
-# Fetch the PD API token from PD_API_KEY_NAME key in SSM
-PD_API_KEY = boto3.client('ssm').get_parameters(
+# Fetch the PD API token. PAGERDUTY_API_KEY env var bypasses SSM for testing.
+PD_API_KEY = os.environ.get('PAGERDUTY_API_KEY') or boto3.client('ssm').get_parameters(
     Names=[os.environ['PD_API_KEY_NAME']],
     WithDecryption=True)['Parameters'][0]['Value']
 
 
-# Get the Current User on-call for a given schedule
 def get_user(schedule_id):
+    """Return the on-call username for a schedule, dispatching to v3 for shift-based schedules and v2 for layer-based."""
+    # Try shift-based (v3) path first; falls back to layer-based (v2) on None
+    username = get_user_v3(schedule_id)
+    if username is not None:
+        logger.info("Currently on call: {}".format(username))
+        return username
+
+    # v2 layer-based path
     global PD_API_KEY
     headers = {
         'Accept': 'application/vnd.pagerduty+json;version=2',
         'Authorization': 'Token token={token}'.format(token=PD_API_KEY)
     }
-    normal_url = 'https://api.pagerduty.com/schedules/{0}/users'.format(
-        schedule_id
-    )
-    override_url = 'https://api.pagerduty.com/schedules/{0}/overrides'.format(
-        schedule_id
-    )
+    normal_url = 'https://api.pagerduty.com/schedules/{0}/users'.format(schedule_id)
+    override_url = 'https://api.pagerduty.com/schedules/{0}/overrides'.format(schedule_id)
     # This value should be less than the running interval
     # It is best to use UTC for the datetime object
     now = datetime.now(timezone.utc)
@@ -60,35 +63,98 @@ def get_user(schedule_id):
         # because the /overrides endpoint does not guarentee an order of the
         # output.
         override_response = http.request('GET', override_url, headers=headers, fields=payload)
-        body = override_response.data.decode('utf-8')
-        override = json.loads(body)
-        if override.get('overrides'):  # is not empty list; .get() handles shift-based schedules that return an error on this endpoint
+        override = json.loads(override_response.data.decode('utf-8'))
+        if override.get('overrides'):
             username = username + " (Override)"
     except IndexError:
         username = "No One :thisisfine:"
     except KeyError:
-        username = f"Deactivated User :scream: ({normal['users'][0]['summary']})"
+        username = "Deactivated User :scream: ({})".format(normal['users'][0]['summary'])
 
     logger.info("Currently on call: {}".format(username))
     return username
 
 
-def get_pd_schedule_name(schedule_id):
+def get_user_v3(schedule_id):
+    """Return the on-call username for a shift-based (v3) schedule, or None if the schedule is layer-based."""
     global PD_API_KEY
     headers = {
         'Accept': 'application/vnd.pagerduty+json;version=2',
         'Authorization': 'Token token={token}'.format(token=PD_API_KEY)
     }
-    url = 'https://api.pagerduty.com/schedules/{0}'.format(schedule_id)
-    response = http.request('GET', url, headers=headers)
-    body = response.data.decode('utf-8')
-    r = json.loads(body)
+    now = datetime.now(timezone.utc)
+    since = now - timedelta(minutes=1)
+    payload = {
+        'since': since.isoformat(),
+        'until': now.isoformat(),
+        'include[]': 'final_schedule',
+    }
+    response = http.request(
+        'GET',
+        'https://api.pagerduty.com/v3/schedules/{0}'.format(schedule_id),
+        headers=headers,
+        fields=payload
+    )
+    if response.status == 400:
+        return None  # not a shift-based schedule
+    if response.status == 404:
+        logger.critical("ABORT: Not a valid schedule: {}".format(schedule_id))
+        return False
+
+    body = json.loads(response.data.decode('utf-8'))
+    assignments = (
+        body.get('schedule', {})
+            .get('final_schedule', {})
+            .get('computed_shift_assignments', [])
+    )
+
+    active = [a for a in assignments if a['member']['type'] == 'user_member']
+    if not active:
+        return 'No One :thisisfine:'
+
+    assignment = active[0]
+    username = get_user_name(assignment['member']['user_id'])
+    if assignment.get('source', {}).get('type', '').endswith('_override'):
+        username += ' (Override)'
+    return username
+
+
+def get_user_name(user_id):
+    """Resolve a PagerDuty user_id to a display name via the v2 /users endpoint."""
+    global PD_API_KEY
+    headers = {
+        'Accept': 'application/vnd.pagerduty+json;version=2',
+        'Authorization': 'Token token={token}'.format(token=PD_API_KEY)
+    }
+    response = http.request('GET', 'https://api.pagerduty.com/users/{0}'.format(user_id), headers=headers)
     try:
-        return r['schedule']['name']
-    except KeyError:
-        logger.debug(response.status)
-        logger.debug(r)
-        return None
+        return json.loads(response.data.decode('utf-8'))['user']['name']
+    except (KeyError, ValueError):
+        return user_id
+
+
+def get_pd_schedule_name(schedule_id):
+    """Return the human-readable name for a schedule, trying v3 first then v2."""
+    global PD_API_KEY
+    headers = {
+        'Accept': 'application/vnd.pagerduty+json;version=2',
+        'Authorization': 'Token token={token}'.format(token=PD_API_KEY)
+    }
+    # Try v3 first (shift-based schedules return 400 on the v2 endpoint)
+    for url in [
+        'https://api.pagerduty.com/v3/schedules/{0}'.format(schedule_id),
+        'https://api.pagerduty.com/schedules/{0}'.format(schedule_id),
+    ]:
+        response = http.request('GET', url, headers=headers)
+        if response.status == 400:
+            continue
+        try:
+            return json.loads(response.data.decode('utf-8'))['schedule']['name']
+        except KeyError:
+            logger.debug(response.status)
+            logger.debug(response.data)
+            return None
+    return None
 
 
 def get_slack_topic(channel):
