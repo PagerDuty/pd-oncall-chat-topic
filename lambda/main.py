@@ -28,17 +28,20 @@ PD_API_KEY = os.environ.get('PAGERDUTY_API_KEY') or boto3.client('ssm').get_para
 
 # Get the Current User on-call for a given schedule
 def get_user(schedule_id):
+    # Try shift-based (v3) path first; falls back to layer-based (v2) on None
+    username = get_user_v3(schedule_id)
+    if username is not None:
+        logger.info("Currently on call: {}".format(username))
+        return username
+
+    # v2 layer-based path
     global PD_API_KEY
     headers = {
         'Accept': 'application/vnd.pagerduty+json;version=2',
         'Authorization': 'Token token={token}'.format(token=PD_API_KEY)
     }
-    normal_url = 'https://api.pagerduty.com/schedules/{0}/users'.format(
-        schedule_id
-    )
-    override_url = 'https://api.pagerduty.com/schedules/{0}/overrides'.format(
-        schedule_id
-    )
+    normal_url = 'https://api.pagerduty.com/schedules/{0}/users'.format(schedule_id)
+    override_url = 'https://api.pagerduty.com/schedules/{0}/overrides'.format(schedule_id)
     # This value should be less than the running interval
     # It is best to use UTC for the datetime object
     now = datetime.now(timezone.utc)
@@ -60,14 +63,13 @@ def get_user(schedule_id):
         # because the /overrides endpoint does not guarentee an order of the
         # output.
         override_response = http.request('GET', override_url, headers=headers, fields=payload)
-        body = override_response.data.decode('utf-8')
-        override = json.loads(body)
-        if override['overrides']:  # is not empty list
+        override = json.loads(override_response.data.decode('utf-8'))
+        if override.get('overrides'):
             username = username + " (Override)"
     except IndexError:
         username = "No One :thisisfine:"
     except KeyError:
-        username = f"Deactivated User :scream: ({normal['users'][0]['summary']})"
+        username = "Deactivated User :scream: ({})".format(normal['users'][0]['summary'])
 
     logger.info("Currently on call: {}".format(username))
     return username
