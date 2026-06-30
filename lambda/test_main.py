@@ -29,6 +29,34 @@ class TestImport(unittest.TestCase):
         self.assertTrue(hasattr(main, 'get_pd_schedule_name'))
 
 
+class TestGetPdScheduleName(unittest.TestCase):
+    def test_returns_name_from_v3_for_shift_based(self):
+        with patch.object(main.http, 'request') as mock_req:
+            mock_req.return_value = _mock_response(200, {
+                'schedule': {'name': 'Core Infrastructure', 'type': 'schedule_v3'}
+            })
+            result = main.get_pd_schedule_name('PSHIFT1')
+        self.assertEqual(result, 'Core Infrastructure')
+        call_url = mock_req.call_args[0][1]
+        self.assertIn('/v3/schedules/', call_url)
+
+    def test_falls_back_to_v2_when_v3_returns_400(self):
+        def side_effect(method, url, **kwargs):
+            if '/v3/' in url:
+                return _mock_response(400, {'error': {'code': 3005}})
+            return _mock_response(200, {'schedule': {'name': 'Layer Schedule'}})
+
+        with patch.object(main.http, 'request', side_effect=side_effect):
+            result = main.get_pd_schedule_name('PLAYER1')
+        self.assertEqual(result, 'Layer Schedule')
+
+    def test_returns_none_when_both_fail(self):
+        with patch.object(main.http, 'request') as mock_req:
+            mock_req.return_value = _mock_response(404, {})
+            result = main.get_pd_schedule_name('PBOGUS1')
+        self.assertIsNone(result)
+
+
 class TestGetUserDispatch(unittest.TestCase):
     def test_uses_v3_path_for_shift_based_schedule(self):
         with patch.object(main, 'get_user_v3', return_value='Alice Example') as mock_v3:

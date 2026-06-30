@@ -137,16 +137,21 @@ def get_pd_schedule_name(schedule_id):
         'Accept': 'application/vnd.pagerduty+json;version=2',
         'Authorization': 'Token token={token}'.format(token=PD_API_KEY)
     }
-    url = 'https://api.pagerduty.com/schedules/{0}'.format(schedule_id)
-    response = http.request('GET', url, headers=headers)
-    body = response.data.decode('utf-8')
-    r = json.loads(body)
-    try:
-        return r['schedule']['name']
-    except KeyError:
-        logger.debug(response.status)
-        logger.debug(r)
-        return None
+    # Try v3 first (shift-based schedules return 400 on the v2 endpoint)
+    for url in [
+        'https://api.pagerduty.com/v3/schedules/{0}'.format(schedule_id),
+        'https://api.pagerduty.com/schedules/{0}'.format(schedule_id),
+    ]:
+        response = http.request('GET', url, headers=headers)
+        if response.status == 400:
+            continue
+        try:
+            return json.loads(response.data.decode('utf-8'))['schedule']['name']
+        except KeyError:
+            logger.debug(response.status)
+            logger.debug(response.data)
+            return None
+    return None
 
 
 def get_slack_topic(channel):
