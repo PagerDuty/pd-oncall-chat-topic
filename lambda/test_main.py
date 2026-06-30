@@ -23,6 +23,24 @@ def _mock_response(status, body):
     return mock
 
 
+class TestDoWorkEndToEnd(unittest.TestCase):
+    def test_shift_based_schedule_sets_correct_topic(self):
+        ddb_item = {
+            'schedule': {'S': 'PSHIFT1'},
+            'slack': {'S': 'C123456'},
+        }
+
+        with patch.object(main, 'get_user_v3', return_value='Alice Example'), \
+             patch.object(main, 'get_pd_schedule_name', return_value='Core Infrastructure'), \
+             patch.object(main, 'update_slack_topic') as mock_update:
+            main.do_work(ddb_item)
+
+        mock_update.assert_called_once_with(
+            'C123456',
+            'Alice Example is on-call for Core Infrastructure'
+        )
+
+
 class TestImport(unittest.TestCase):
     def test_module_imports(self):
         self.assertTrue(hasattr(main, 'get_user'))
