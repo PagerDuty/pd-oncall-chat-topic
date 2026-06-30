@@ -62,7 +62,7 @@ def get_user(schedule_id):
         override_response = http.request('GET', override_url, headers=headers, fields=payload)
         body = override_response.data.decode('utf-8')
         override = json.loads(body)
-        if override['overrides']:  # is not empty list
+        if override.get('overrides'):  # is not empty list; .get() handles shift-based schedules that return an error on this endpoint
             username = username + " (Override)"
     except IndexError:
         username = "No One :thisisfine:"
