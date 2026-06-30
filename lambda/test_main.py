@@ -29,6 +29,42 @@ class TestImport(unittest.TestCase):
         self.assertTrue(hasattr(main, 'get_pd_schedule_name'))
 
 
+class TestGetUserDispatch(unittest.TestCase):
+    def test_uses_v3_path_for_shift_based_schedule(self):
+        with patch.object(main, 'get_user_v3', return_value='Alice Example') as mock_v3:
+            result = main.get_user('PSHIFT1')
+        mock_v3.assert_called_once_with('PSHIFT1')
+        self.assertEqual(result, 'Alice Example')
+
+    def test_falls_back_to_v2_when_v3_returns_none(self):
+        v2_users_body = {'users': [{'name': 'Bob Example'}]}
+        v2_overrides_body = {'overrides': []}
+
+        def side_effect(method, url, **kwargs):
+            if '/users' in url:
+                return _mock_response(200, v2_users_body)
+            return _mock_response(200, v2_overrides_body)
+
+        with patch.object(main, 'get_user_v3', return_value=None), \
+             patch.object(main.http, 'request', side_effect=side_effect):
+            result = main.get_user('PLAYER1')
+        self.assertEqual(result, 'Bob Example')
+
+    def test_v2_path_appends_override(self):
+        v2_users_body = {'users': [{'name': 'Carol Example'}]}
+        v2_overrides_body = {'overrides': [{'id': 'POVER01'}]}
+
+        def side_effect(method, url, **kwargs):
+            if '/users' in url:
+                return _mock_response(200, v2_users_body)
+            return _mock_response(200, v2_overrides_body)
+
+        with patch.object(main, 'get_user_v3', return_value=None), \
+             patch.object(main.http, 'request', side_effect=side_effect):
+            result = main.get_user('PLAYER1')
+        self.assertEqual(result, 'Carol Example (Override)')
+
+
 class TestGetUserV3(unittest.TestCase):
     def _v3_response(self, assignments):
         return _mock_response(200, {
