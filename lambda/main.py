@@ -26,8 +26,8 @@ PD_API_KEY = os.environ.get('PAGERDUTY_API_KEY') or boto3.client('ssm').get_para
     WithDecryption=True)['Parameters'][0]['Value']
 
 
-# Get the Current User on-call for a given schedule
 def get_user(schedule_id):
+    """Return the on-call username for a schedule, dispatching to v3 for shift-based schedules and v2 for layer-based."""
     # Try shift-based (v3) path first; falls back to layer-based (v2) on None
     username = get_user_v3(schedule_id)
     if username is not None:
@@ -76,6 +76,7 @@ def get_user(schedule_id):
 
 
 def get_user_v3(schedule_id):
+    """Return the on-call username for a shift-based (v3) schedule, or None if the schedule is layer-based."""
     global PD_API_KEY
     headers = {
         'Accept': 'application/vnd.pagerduty+json;version=2',
@@ -119,6 +120,7 @@ def get_user_v3(schedule_id):
 
 
 def get_user_name(user_id):
+    """Resolve a PagerDuty user_id to a display name via the v2 /users endpoint."""
     global PD_API_KEY
     headers = {
         'Accept': 'application/vnd.pagerduty+json;version=2',
@@ -132,6 +134,7 @@ def get_user_name(user_id):
 
 
 def get_pd_schedule_name(schedule_id):
+    """Return the human-readable name for a schedule, trying v3 first then v2."""
     global PD_API_KEY
     headers = {
         'Accept': 'application/vnd.pagerduty+json;version=2',

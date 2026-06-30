@@ -3,12 +3,15 @@ import json
 import unittest
 from unittest.mock import patch, MagicMock
 
-# Bypass SSM at import time
+# Set env vars before importing main so the module-level SSM fetch is bypassed.
+# PAGERDUTY_API_KEY short-circuits the boto3 SSM call in the module body.
 os.environ.setdefault('PAGERDUTY_API_KEY', 'test-pd-key')
 os.environ.setdefault('PD_API_KEY_NAME', 'test-pd-key-name')
 os.environ.setdefault('SLACK_API_KEY_NAME', 'test-slack-key-name')
 os.environ.setdefault('CONFIG_TABLE', 'test-table')
 
+# "lambda" is a Python keyword, so we cannot do `import lambda.main`.
+# Insert the lambda/ directory onto the path and import main directly.
 import sys
 import os as _os
 sys.path.insert(0, _os.path.join(_os.path.dirname(__file__)))
@@ -23,6 +26,9 @@ def _mock_response(status, body):
     return mock
 
 
+# ---------------------------------------------------------------------------
+# End-to-end: do_work() → get_user() → update_slack_topic()
+# ---------------------------------------------------------------------------
 class TestDoWorkEndToEnd(unittest.TestCase):
     def test_shift_based_schedule_sets_correct_topic(self):
         ddb_item = {
@@ -41,12 +47,18 @@ class TestDoWorkEndToEnd(unittest.TestCase):
         )
 
 
+# ---------------------------------------------------------------------------
+# Smoke: confirm module attributes survive the import workaround above
+# ---------------------------------------------------------------------------
 class TestImport(unittest.TestCase):
     def test_module_imports(self):
         self.assertTrue(hasattr(main, 'get_user'))
         self.assertTrue(hasattr(main, 'get_pd_schedule_name'))
 
 
+# ---------------------------------------------------------------------------
+# get_pd_schedule_name: tries v3, falls back to v2 on 400
+# ---------------------------------------------------------------------------
 class TestGetPdScheduleName(unittest.TestCase):
     def test_returns_name_from_v3_for_shift_based(self):
         with patch.object(main.http, 'request') as mock_req:
@@ -75,6 +87,9 @@ class TestGetPdScheduleName(unittest.TestCase):
         self.assertIsNone(result)
 
 
+# ---------------------------------------------------------------------------
+# get_user: dispatch logic — v3 wins when it returns a value, v2 on None
+# ---------------------------------------------------------------------------
 class TestGetUserDispatch(unittest.TestCase):
     def test_uses_v3_path_for_shift_based_schedule(self):
         with patch.object(main, 'get_user_v3', return_value='Alice Example') as mock_v3:
@@ -111,6 +126,9 @@ class TestGetUserDispatch(unittest.TestCase):
         self.assertEqual(result, 'Carol Example (Override)')
 
 
+# ---------------------------------------------------------------------------
+# get_user_v3: shift-based schedule logic, override detection, empty slots
+# ---------------------------------------------------------------------------
 class TestGetUserV3(unittest.TestCase):
     def _v3_response(self, assignments):
         return _mock_response(200, {
@@ -166,6 +184,9 @@ class TestGetUserV3(unittest.TestCase):
         self.assertFalse(result)
 
 
+# ---------------------------------------------------------------------------
+# get_user_name: resolves user_id → display name, falls back to id on error
+# ---------------------------------------------------------------------------
 class TestGetUserName(unittest.TestCase):
     def test_returns_name(self):
         with patch.object(main.http, 'request') as mock_req:
