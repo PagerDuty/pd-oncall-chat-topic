@@ -184,8 +184,20 @@ class TestGetUserV3(unittest.TestCase):
         self.assertFalse(result)
 
 
+    def test_returns_n_people_when_multiple_users_on_call(self):
+        assignments = [
+            {'member': {'type': 'user_member', 'user_id': 'PUSER01'}, 'source': {'type': 'schedule_rotation'}},
+            {'member': {'type': 'user_member', 'user_id': 'PUSER02'}, 'source': {'type': 'schedule_rotation'}},
+            {'member': {'type': 'user_member', 'user_id': 'PUSER03'}, 'source': {'type': 'schedule_rotation'}},
+        ]
+        with patch.object(main.http, 'request') as mock_req:
+            mock_req.return_value = self._v3_response(assignments)
+            result = main.get_user_v3('PSHIFT1')
+        self.assertEqual(result, '3 People on call')
+
+
 # ---------------------------------------------------------------------------
-# get_user_name: resolves user_id → display name, falls back to id on error
+# get_user_name: resolves user_id → display name, falls back to Unknown User on error
 # ---------------------------------------------------------------------------
 class TestGetUserName(unittest.TestCase):
     def test_returns_name(self):
@@ -196,8 +208,8 @@ class TestGetUserName(unittest.TestCase):
             result = main.get_user_name('PUSER01')
         self.assertEqual(result, 'Alice Example')
 
-    def test_falls_back_to_id_on_error(self):
+    def test_falls_back_to_unknown_user_on_error(self):
         with patch.object(main.http, 'request') as mock_req:
             mock_req.return_value = _mock_response(404, {'error': {}})
             result = main.get_user_name('PUSER01')
-        self.assertEqual(result, 'PUSER01')
+        self.assertEqual(result, 'Unknown User')

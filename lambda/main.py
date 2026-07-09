@@ -69,7 +69,7 @@ def get_user(schedule_id):
     except IndexError:
         username = "No One :thisisfine:"
     except KeyError:
-        username = "Deactivated User :scream: ({})".format(normal['users'][0]['summary'])
+        username = "Unknown User"
 
     logger.info("Currently on call: {}".format(username))
     return username
@@ -83,10 +83,10 @@ def get_user_v3(schedule_id):
         'Authorization': 'Token token={token}'.format(token=PD_API_KEY)
     }
     now = datetime.now(timezone.utc)
-    since = now - timedelta(minutes=1)
+    until = now + timedelta(seconds=1)
     payload = {
-        'since': since.isoformat(),
-        'until': now.isoformat(),
+        'since': now.isoformat(),
+        'until': until.isoformat(),
         'include[]': 'final_schedule',
     }
     response = http.request(
@@ -112,6 +112,9 @@ def get_user_v3(schedule_id):
     if not active:
         return 'No One :thisisfine:'
 
+    if len(active) > 1:
+        return '{} People on call'.format(len(active))
+
     assignment = active[0]
     username = get_user_name(assignment['member']['user_id'])
     if assignment.get('source', {}).get('type', '').endswith('_override'):
@@ -130,7 +133,7 @@ def get_user_name(user_id):
     try:
         return json.loads(response.data.decode('utf-8'))['user']['name']
     except (KeyError, ValueError):
-        return user_id
+        return 'Unknown User'
 
 
 def get_pd_schedule_name(schedule_id):
