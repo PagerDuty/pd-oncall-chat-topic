@@ -20,25 +20,28 @@ logging.getLogger('botocore').setLevel(logging.CRITICAL)
 logger = logging.getLogger()
 logger.setLevel(logging.DEBUG)
 
-# Fetch the PD API token from PD_API_KEY_NAME key in SSM
-PD_API_KEY = boto3.client('ssm').get_parameters(
+# Fetch the PD API token. PAGERDUTY_API_KEY env var bypasses SSM for testing.
+PD_API_KEY = os.environ.get('PAGERDUTY_API_KEY') or boto3.client('ssm').get_parameters(
     Names=[os.environ['PD_API_KEY_NAME']],
     WithDecryption=True)['Parameters'][0]['Value']
 
 
-# Get the Current User on-call for a given schedule
 def get_user(schedule_id):
+    """Return the on-call username for a schedule, dispatching to v3 for shift-based schedules and v2 for layer-based."""
+    # Try shift-based (v3) path first; falls back to layer-based (v2) on None
+    username = get_user_v3(schedule_id)
+    if username is not None:
+        logger.info("Currently on call: {}".format(username))
+        return username
+
+    # v2 layer-based path
     global PD_API_KEY
     headers = {
         'Accept': 'application/vnd.pagerduty+json;version=2',
         'Authorization': 'Token token={token}'.format(token=PD_API_KEY)
     }
-    normal_url = 'https://api.pagerduty.com/schedules/{0}/users'.format(
-        schedule_id
-    )
-    override_url = 'https://api.pagerduty.com/schedules/{0}/overrides'.format(
-        schedule_id
-    )
+    normal_url = 'https://api.pagerduty.com/schedules/{0}/users'.format(schedule_id)
+    override_url = 'https://api.pagerduty.com/schedules/{0}/overrides'.format(schedule_id)
     # This value should be less than the running interval
     # It is best to use UTC for the datetime object
     now = datetime.now(timezone.utc)
@@ -50,7 +53,7 @@ def get_user(schedule_id):
     body = response.data.decode('utf-8')
     if response.status == 404:
         logger.critical("ABORT: Not a valid schedule: {}".format(schedule_id))
-        return False
+        raise RuntimeError("schedule not found: {}".format(schedule_id))
     normal = json.loads(body)
     try:
         username = normal['users'][0]['name']
@@ -60,35 +63,104 @@ def get_user(schedule_id):
         # because the /overrides endpoint does not guarentee an order of the
         # output.
         override_response = http.request('GET', override_url, headers=headers, fields=payload)
-        body = override_response.data.decode('utf-8')
-        override = json.loads(body)
-        if override.get('overrides'):  # is not empty list; .get() handles shift-based schedules that return an error on this endpoint
+        override = json.loads(override_response.data.decode('utf-8'))
+        if override.get('overrides'):
             username = username + " (Override)"
     except IndexError:
         username = "No One :thisisfine:"
     except KeyError:
-        username = f"Deactivated User :scream: ({normal['users'][0]['summary']})"
+        username = "Unknown User"
 
     logger.info("Currently on call: {}".format(username))
     return username
 
 
-def get_pd_schedule_name(schedule_id):
+def get_user_v3(schedule_id):
+    """Return the on-call username for a shift-based (v3) schedule, or None if the schedule is layer-based."""
     global PD_API_KEY
     headers = {
         'Accept': 'application/vnd.pagerduty+json;version=2',
         'Authorization': 'Token token={token}'.format(token=PD_API_KEY)
     }
-    url = 'https://api.pagerduty.com/schedules/{0}'.format(schedule_id)
-    response = http.request('GET', url, headers=headers)
-    body = response.data.decode('utf-8')
-    r = json.loads(body)
+    now = datetime.now(timezone.utc)
+    until = now + timedelta(seconds=1)
+    payload = {
+        'since': now.isoformat(),
+        'until': until.isoformat(),
+        'include[]': 'final_schedule',
+    }
+    response = http.request(
+        'GET',
+        'https://api.pagerduty.com/v3/schedules/{0}'.format(schedule_id),
+        headers=headers,
+        fields=payload
+    )
+    if response.status == 400:
+        return None  # not a shift-based schedule
+    if response.status == 404:
+        logger.critical("ABORT: Not a valid schedule: {}".format(schedule_id))
+        raise RuntimeError("schedule not found: {}".format(schedule_id))
+    if response.status != 200:
+        logger.error("Transient error (HTTP {}) from v3 API for schedule {}, skipping topic update".format(response.status, schedule_id))
+        raise RuntimeError("transient v3 API error")
+
+    body = json.loads(response.data.decode('utf-8'))
+    assignments = (
+        body.get('schedule', {})
+            .get('final_schedule', {})
+            .get('computed_shift_assignments', [])
+    )
+
+    active = [a for a in assignments if a['member']['type'] == 'user_member']
+    if not active:
+        return 'No One :thisisfine:'
+
+    if len(active) > 1:
+        return '{} People on call'.format(len(active))
+
+    assignment = active[0]
+    username = get_user_name(assignment['member']['user_id'])
+    if assignment.get('source', {}).get('type', '').endswith('_override'):
+        username += ' (Override)'
+    return username
+
+
+def get_user_name(user_id):
+    """Resolve a PagerDuty user_id to a display name via the v2 /users endpoint."""
+    global PD_API_KEY
+    headers = {
+        'Accept': 'application/vnd.pagerduty+json;version=2',
+        'Authorization': 'Token token={token}'.format(token=PD_API_KEY)
+    }
+    response = http.request('GET', 'https://api.pagerduty.com/users/{0}'.format(user_id), headers=headers)
     try:
-        return r['schedule']['name']
-    except KeyError:
-        logger.debug(response.status)
-        logger.debug(r)
-        return None
+        return json.loads(response.data.decode('utf-8'))['user']['name']
+    except (KeyError, ValueError):
+        return 'Unknown User'
+
+
+def get_pd_schedule_name(schedule_id):
+    """Return the human-readable name for a schedule, trying v3 first then v2."""
+    global PD_API_KEY
+    headers = {
+        'Accept': 'application/vnd.pagerduty+json;version=2',
+        'Authorization': 'Token token={token}'.format(token=PD_API_KEY)
+    }
+    # Try v3 first (shift-based schedules return 400 on the v2 endpoint)
+    for url in [
+        'https://api.pagerduty.com/v3/schedules/{0}'.format(schedule_id),
+        'https://api.pagerduty.com/schedules/{0}'.format(schedule_id),
+    ]:
+        response = http.request('GET', url, headers=headers)
+        if response.status == 400:
+            continue
+        try:
+            return json.loads(response.data.decode('utf-8'))['schedule']['name']
+        except KeyError:
+            logger.debug(response.status)
+            logger.debug(response.data)
+            return None
+    return None
 
 
 def get_slack_topic(channel):
@@ -201,47 +273,51 @@ def figure_out_schedule(s):
 def do_work(obj):
     # entrypoint of the thread
     sema.acquire()
-    logger.debug("Operating on {}".format(obj))
-    # schedule will ALWAYS be there, it is a ddb primarykey
-    schedules = obj['schedule']['S']
-    schedule_list = schedules.split(',')
-    oncall_dict = {}
-    for schedule in schedule_list:  #schedule can now be a whitespace separated 'list' in a string
-        schedule = figure_out_schedule(schedule)
+    try:
+        logger.debug("Operating on {}".format(obj))
+        # schedule will ALWAYS be there, it is a ddb primarykey
+        schedules = obj['schedule']['S']
+        schedule_list = schedules.split(',')
+        oncall_dict = {}
+        for schedule in schedule_list:  #schedule can now be a whitespace separated 'list' in a string
+            schedule = figure_out_schedule(schedule)
 
-        if schedule:
-            username = get_user(schedule)
-        else:
-            logger.critical("Exiting: Schedule not found or not valid, see previous errors")
-            return 127
-        try:
-            sched_names = (obj['sched_name']['S']).split(',')
-            sched_name = sched_names[schedule_list.index(schedule)] #We want the schedule name in the same position as the schedule we're using
-        except:
-            sched_name = get_pd_schedule_name(schedule)
-        oncall_dict[username] = sched_name
+            if schedule:
+                username = get_user(schedule)
+            else:
+                logger.critical("Exiting: Schedule not found or not valid, see previous errors")
+                return 127
+            try:
+                sched_names = (obj['sched_name']['S']).split(',')
+                sched_name = sched_names[schedule_list.index(schedule)] #We want the schedule name in the same position as the schedule we're using
+            except:
+                sched_name = get_pd_schedule_name(schedule)
+            oncall_dict[username] = sched_name
 
-    if oncall_dict:  # then it is valid and update the chat topic
-        topic = ""
-        i = 0
-        for user in oncall_dict:
-            if i != 0:
-                topic += ", "
-            topic += "{} is on-call for {}".format(
-                user,
-                oncall_dict[user]
-            )
-            i += 1
+        if oncall_dict:  # then it is valid and update the chat topic
+            topic = ""
+            i = 0
+            for user in oncall_dict:
+                if i != 0:
+                    topic += ", "
+                topic += "{} is on-call for {}".format(
+                    user,
+                    oncall_dict[user]
+                )
+                i += 1
 
-        if 'slack' in obj.keys():
-            slack = obj['slack']['S']
-            # 'slack' may contain multiple channels seperated by whitespace
-            for channel in slack.split():
-                update_slack_topic(channel, topic)
-        elif 'hipchat' in obj.keys():
-            # hipchat = obj['hipchat']['S']
-            logger.critical("HipChat is not supported yet. Ignoring this entry...")
-    sema.release()
+            if 'slack' in obj.keys():
+                slack = obj['slack']['S']
+                # 'slack' may contain multiple channels seperated by whitespace
+                for channel in slack.split():
+                    update_slack_topic(channel, topic)
+            elif 'hipchat' in obj.keys():
+                # hipchat = obj['hipchat']['S']
+                logger.critical("HipChat is not supported yet. Ignoring this entry...")
+    except RuntimeError:
+        pass  # error already logged; leave the existing topic unchanged
+    finally:
+        sema.release()
 
 
 def handler(event, context):
