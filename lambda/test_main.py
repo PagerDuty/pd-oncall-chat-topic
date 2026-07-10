@@ -46,6 +46,21 @@ class TestDoWorkEndToEnd(unittest.TestCase):
             'Alice Example is on-call for Core Infrastructure'
         )
 
+    def test_transient_api_error_skips_topic_update(self):
+        # When get_user raises (e.g. a transient PagerDuty 5xx), do_work must
+        # leave the existing Slack topic unchanged rather than writing a stale
+        # or misleading value.
+        ddb_item = {
+            'schedule': {'S': 'PSHIFT1'},
+            'slack': {'S': 'C123456'},
+        }
+
+        with patch.object(main, 'get_user_v3', side_effect=RuntimeError("transient v3 API error")), \
+             patch.object(main, 'update_slack_topic') as mock_update:
+            main.do_work(ddb_item)
+
+        mock_update.assert_not_called()
+
 
 # ---------------------------------------------------------------------------
 # Smoke: confirm module attributes survive the import workaround above
@@ -177,11 +192,19 @@ class TestGetUserV3(unittest.TestCase):
             result = main.get_user_v3('PLAYER1')
         self.assertIsNone(result)
 
-    def test_returns_false_for_invalid_schedule(self):
+    def test_raises_on_invalid_schedule(self):
         with patch.object(main.http, 'request') as mock_req:
             mock_req.return_value = _mock_response(404, {})
-            result = main.get_user_v3('PBOGUS1')
-        self.assertFalse(result)
+            with self.assertRaises(RuntimeError):
+                main.get_user_v3('PBOGUS1')
+
+    def test_raises_on_transient_server_error(self):
+        # A 5xx from PagerDuty must raise rather than fall through to parse
+        # the error body, which would produce a false "No One on call" result.
+        with patch.object(main.http, 'request') as mock_req:
+            mock_req.return_value = _mock_response(500, {})
+            with self.assertRaises(RuntimeError):
+                main.get_user_v3('PSHIFT1')
 
 
     def test_returns_n_people_when_multiple_users_on_call(self):

@@ -53,7 +53,7 @@ def get_user(schedule_id):
     body = response.data.decode('utf-8')
     if response.status == 404:
         logger.critical("ABORT: Not a valid schedule: {}".format(schedule_id))
-        return False
+        raise RuntimeError("schedule not found: {}".format(schedule_id))
     normal = json.loads(body)
     try:
         username = normal['users'][0]['name']
@@ -99,7 +99,10 @@ def get_user_v3(schedule_id):
         return None  # not a shift-based schedule
     if response.status == 404:
         logger.critical("ABORT: Not a valid schedule: {}".format(schedule_id))
-        return False
+        raise RuntimeError("schedule not found: {}".format(schedule_id))
+    if response.status != 200:
+        logger.error("Transient error (HTTP {}) from v3 API for schedule {}, skipping topic update".format(response.status, schedule_id))
+        raise RuntimeError("transient v3 API error")
 
     body = json.loads(response.data.decode('utf-8'))
     assignments = (
@@ -270,47 +273,51 @@ def figure_out_schedule(s):
 def do_work(obj):
     # entrypoint of the thread
     sema.acquire()
-    logger.debug("Operating on {}".format(obj))
-    # schedule will ALWAYS be there, it is a ddb primarykey
-    schedules = obj['schedule']['S']
-    schedule_list = schedules.split(',')
-    oncall_dict = {}
-    for schedule in schedule_list:  #schedule can now be a whitespace separated 'list' in a string
-        schedule = figure_out_schedule(schedule)
+    try:
+        logger.debug("Operating on {}".format(obj))
+        # schedule will ALWAYS be there, it is a ddb primarykey
+        schedules = obj['schedule']['S']
+        schedule_list = schedules.split(',')
+        oncall_dict = {}
+        for schedule in schedule_list:  #schedule can now be a whitespace separated 'list' in a string
+            schedule = figure_out_schedule(schedule)
 
-        if schedule:
-            username = get_user(schedule)
-        else:
-            logger.critical("Exiting: Schedule not found or not valid, see previous errors")
-            return 127
-        try:
-            sched_names = (obj['sched_name']['S']).split(',')
-            sched_name = sched_names[schedule_list.index(schedule)] #We want the schedule name in the same position as the schedule we're using
-        except:
-            sched_name = get_pd_schedule_name(schedule)
-        oncall_dict[username] = sched_name
+            if schedule:
+                username = get_user(schedule)
+            else:
+                logger.critical("Exiting: Schedule not found or not valid, see previous errors")
+                return 127
+            try:
+                sched_names = (obj['sched_name']['S']).split(',')
+                sched_name = sched_names[schedule_list.index(schedule)] #We want the schedule name in the same position as the schedule we're using
+            except:
+                sched_name = get_pd_schedule_name(schedule)
+            oncall_dict[username] = sched_name
 
-    if oncall_dict:  # then it is valid and update the chat topic
-        topic = ""
-        i = 0
-        for user in oncall_dict:
-            if i != 0:
-                topic += ", "
-            topic += "{} is on-call for {}".format(
-                user,
-                oncall_dict[user]
-            )
-            i += 1
+        if oncall_dict:  # then it is valid and update the chat topic
+            topic = ""
+            i = 0
+            for user in oncall_dict:
+                if i != 0:
+                    topic += ", "
+                topic += "{} is on-call for {}".format(
+                    user,
+                    oncall_dict[user]
+                )
+                i += 1
 
-        if 'slack' in obj.keys():
-            slack = obj['slack']['S']
-            # 'slack' may contain multiple channels seperated by whitespace
-            for channel in slack.split():
-                update_slack_topic(channel, topic)
-        elif 'hipchat' in obj.keys():
-            # hipchat = obj['hipchat']['S']
-            logger.critical("HipChat is not supported yet. Ignoring this entry...")
-    sema.release()
+            if 'slack' in obj.keys():
+                slack = obj['slack']['S']
+                # 'slack' may contain multiple channels seperated by whitespace
+                for channel in slack.split():
+                    update_slack_topic(channel, topic)
+            elif 'hipchat' in obj.keys():
+                # hipchat = obj['hipchat']['S']
+                logger.critical("HipChat is not supported yet. Ignoring this entry...")
+    except RuntimeError:
+        pass  # error already logged; leave the existing topic unchanged
+    finally:
+        sema.release()
 
 
 def handler(event, context):
