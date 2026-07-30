@@ -6,8 +6,7 @@ AWS Lambda Function that updates a Chat Room topic (eg, Slack)
 
 ## Motivation
 At [PagerDuty](https://www.pagerduty.com/), we
-[use](https://www.pagerduty.com/blog/how-does-pagerduty-use-pagerduty/)
-PagerDuty to manage our on-call schedules. One integration that we like is
+use PagerDuty to manage our on-call schedules. One integration that we like is
 knowing who is on-call for a given team, via posting the information in a Slack
 channel topic.
 
