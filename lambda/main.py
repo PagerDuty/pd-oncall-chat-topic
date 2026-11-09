@@ -244,6 +244,138 @@ def update_slack_topic(channel, proposed_update):
         return None
 
 
+def get_oncall_emails(schedule_id):
+    """Return the emails of everyone on call for a schedule right now.
+
+    Unlike get_user(), this returns every on-call person, so a schedule with
+    two people on call yields two emails rather than "2 People on call".
+    Raises RuntimeError on a PagerDuty error so callers can skip the sync.
+    """
+    global PD_API_KEY
+    headers = {
+        'Accept': 'application/vnd.pagerduty+json;version=2',
+        'Authorization': 'Token token={token}'.format(token=PD_API_KEY)
+    }
+    now = datetime.now(timezone.utc)
+
+    # Shift-based (v3) schedules
+    response = http.request(
+        'GET',
+        'https://api.pagerduty.com/v3/schedules/{0}'.format(schedule_id),
+        headers=headers,
+        fields={
+            'since': now.isoformat(),
+            'until': (now + timedelta(seconds=1)).isoformat(),
+            'include[]': 'final_schedule',
+        }
+    )
+    if response.status == 200:
+        body = json.loads(response.data.decode('utf-8'))
+        assignments = (
+            body.get('schedule', {})
+                .get('final_schedule', {})
+                .get('computed_shift_assignments', [])
+        )
+        user_ids = [a['member']['user_id'] for a in assignments
+                    if a['member']['type'] == 'user_member']
+        return [e for e in (get_user_email(uid) for uid in user_ids) if e]
+    if response.status != 400:  # 400 means layer-based; fall through to v2
+        raise RuntimeError("v3 schedule lookup failed: HTTP {}".format(response.status))
+
+    # Layer-based (v2) schedules: /users includes each user's email
+    response = http.request(
+        'GET',
+        'https://api.pagerduty.com/schedules/{0}/users'.format(schedule_id),
+        headers=headers,
+        fields={
+            'since': (now - timedelta(minutes=1)).isoformat(),
+            'until': now.isoformat(),
+        }
+    )
+    if response.status != 200:
+        raise RuntimeError("v2 schedule lookup failed: HTTP {}".format(response.status))
+    users = json.loads(response.data.decode('utf-8')).get('users', [])
+    return [u['email'] for u in users if u.get('email')]
+
+
+def get_user_email(user_id):
+    """Resolve a PagerDuty user_id to an email via the v2 /users endpoint."""
+    global PD_API_KEY
+    headers = {
+        'Accept': 'application/vnd.pagerduty+json;version=2',
+        'Authorization': 'Token token={token}'.format(token=PD_API_KEY)
+    }
+    response = http.request('GET', 'https://api.pagerduty.com/users/{0}'.format(user_id), headers=headers)
+    try:
+        return json.loads(response.data.decode('utf-8'))['user']['email']
+    except (KeyError, ValueError):
+        logger.warning("Could not resolve email for PagerDuty user {}".format(user_id))
+        return None
+
+
+def slack_api(method, http_method, fields):
+    """Call a Slack Web API method with the bot token and return the parsed body."""
+    token = boto3.client('ssm').get_parameters(
+        Names=[os.environ['SLACK_API_KEY_NAME']],
+        WithDecryption=True)['Parameters'][0]['Value']
+    response = http.request(
+        http_method,
+        'https://slack.com/api/{0}'.format(method),
+        headers={'Authorization': 'Bearer {0}'.format(token)},
+        fields=fields
+    )
+    body = json.loads(response.data.decode('utf-8'))
+    if not body.get('ok'):
+        logger.error("Slack {} failed: {}".format(method, body.get('error')))
+    return body
+
+
+def sync_usergroup(usergroup_id, emails):
+    """Make a Slack user group contain exactly the given on-call people.
+
+    Requires the bot scopes users:read.email, usergroups:read and usergroups:write.
+    """
+    desired = set()
+    for email in emails:
+        body = slack_api('users.lookupByEmail', 'GET', {'email': email})
+        if body.get('ok'):
+            desired.add(body['user']['id'])
+        else:
+            logger.warning("No Slack user found for {}".format(email))
+
+    if not desired:
+        # Slack does not allow emptying a user group with usergroups.users.update,
+        # so leave the previous members in place rather than erroring.
+        logger.warning("No on-call Slack users resolved for user group {}; leaving it unchanged".format(usergroup_id))
+        return
+
+    current = slack_api('usergroups.users.list', 'GET', {'usergroup': usergroup_id})
+    if current.get('ok') and set(current.get('users', [])) == desired:
+        logger.info("User group {} already up to date".format(usergroup_id))
+        return
+
+    slack_api('usergroups.users.update', 'POST', {
+        'usergroup': usergroup_id,
+        'users': ','.join(sorted(desired)),
+    })
+    logger.info("Updated user group {} to {}".format(usergroup_id, sorted(desired)))
+
+
+def sync_oncall_usergroup(usergroup_id, schedule_ids):
+    """Sync a user group to everyone on call across the given schedules.
+
+    Errors are logged and swallowed so a user group problem never blocks
+    the topic update for the same item.
+    """
+    try:
+        emails = []
+        for schedule_id in schedule_ids:
+            emails.extend(get_oncall_emails(schedule_id))
+        sync_usergroup(usergroup_id, emails)
+    except Exception as e:
+        logger.error("User group sync failed for {}: {}".format(usergroup_id, e))
+
+
 def figure_out_schedule(s):
     # Purpose here is to find the schedule id if given a human readable name
     # fingers crossed that this regex holds for awhile. "PXXXXXX"
@@ -279,10 +411,12 @@ def do_work(obj):
         schedules = obj['schedule']['S']
         schedule_list = schedules.split(',')
         oncall_dict = {}
+        resolved_schedules = []
         for schedule in schedule_list:  #schedule can now be a whitespace separated 'list' in a string
             schedule = figure_out_schedule(schedule)
 
             if schedule:
+                resolved_schedules.append(schedule)
                 username = get_user(schedule)
             else:
                 logger.critical("Exiting: Schedule not found or not valid, see previous errors")
@@ -314,6 +448,10 @@ def do_work(obj):
             elif 'hipchat' in obj.keys():
                 # hipchat = obj['hipchat']['S']
                 logger.critical("HipChat is not supported yet. Ignoring this entry...")
+
+        # Optional: keep a Slack user group equal to whoever is on call
+        if 'usergroup' in obj.keys():
+            sync_oncall_usergroup(obj['usergroup']['S'], resolved_schedules)
     except RuntimeError:
         pass  # error already logged; leave the existing topic unchanged
     finally:
