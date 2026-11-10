@@ -277,12 +277,17 @@ class TestGetOncallEmails(unittest.TestCase):
 # sync_usergroup: only calls usergroups.users.update when membership changes
 # ---------------------------------------------------------------------------
 class TestSyncUsergroup(unittest.TestCase):
-    def _fake_slack(self, current_members, known_users):
+    def _fake_slack(self, current_members, known_users, handle='my-team-oncall', lookup_error=None):
         calls = []
 
         def fake(method, http_method, fields):
             calls.append((method, fields))
+            if method == 'usergroups.list':
+                groups = [{'id': 'S123', 'handle': handle}] if handle else []
+                return {'ok': True, 'usergroups': groups}
             if method == 'users.lookupByEmail':
+                if lookup_error:
+                    return {'ok': False, 'error': lookup_error}
                 uid = known_users.get(fields['email'])
                 return {'ok': True, 'user': {'id': uid}} if uid else {'ok': False, 'error': 'users_not_found'}
             if method == 'usergroups.users.list':
@@ -313,6 +318,73 @@ class TestSyncUsergroup(unittest.TestCase):
         with patch.object(main, 'slack_api', side_effect=fake):
             main.sync_usergroup('S123', ['a@example.com', 'unknown@example.com'])
         self.assertIn(('usergroups.users.update', {'usergroup': 'S123', 'users': 'UA'}), calls)
+
+    def test_refuses_group_without_oncall_suffix(self):
+        fake, calls = self._fake_slack(['UOLD'], {'a@example.com': 'UA'}, handle='eng-admins')
+        with patch.object(main, 'slack_api', side_effect=fake):
+            main.sync_usergroup('S123', ['a@example.com'])
+        methods = [c[0] for c in calls]
+        self.assertNotIn('users.lookupByEmail', methods)
+        self.assertNotIn('usergroups.users.update', methods)
+
+    def test_skips_group_that_does_not_exist(self):
+        fake, calls = self._fake_slack(['UOLD'], {'a@example.com': 'UA'}, handle=None)
+        with patch.object(main, 'slack_api', side_effect=fake):
+            main.sync_usergroup('S123', ['a@example.com'])
+        self.assertNotIn('usergroups.users.update', [c[0] for c in calls])
+
+    def test_aborts_on_slack_error_other_than_not_found(self):
+        fake, calls = self._fake_slack(['UOLD'], {'a@example.com': 'UA'}, lookup_error='ratelimited')
+        with patch.object(main, 'slack_api', side_effect=fake):
+            with self.assertRaises(RuntimeError):
+                main.sync_usergroup('S123', ['a@example.com'])
+        self.assertNotIn('usergroups.users.update', [c[0] for c in calls])
+
+    def test_aborts_when_usergroups_list_fails(self):
+        with patch.object(main, 'slack_api', return_value={'ok': False, 'error': 'ratelimited'}):
+            with self.assertRaises(RuntimeError):
+                main.sync_usergroup('S123', ['a@example.com'])
+
+
+# ---------------------------------------------------------------------------
+# get_user_email: None only for a real 404; anything else raises
+# ---------------------------------------------------------------------------
+class TestGetUserEmail(unittest.TestCase):
+    def test_returns_email(self):
+        with patch.object(main.http, 'request',
+                          return_value=_mock_response(200, {'user': {'email': 'alice@example.com'}})):
+            self.assertEqual(main.get_user_email('PUSER01'), 'alice@example.com')
+
+    def test_returns_none_for_deleted_user(self):
+        with patch.object(main.http, 'request', return_value=_mock_response(404, {})):
+            self.assertIsNone(main.get_user_email('PUSER01'))
+
+    def test_raises_on_rate_limit(self):
+        with patch.object(main.http, 'request', return_value=_mock_response(429, {})):
+            with self.assertRaises(RuntimeError):
+                main.get_user_email('PUSER01')
+
+    def test_raises_on_server_error(self):
+        with patch.object(main.http, 'request', return_value=_mock_response(500, {})):
+            with self.assertRaises(RuntimeError):
+                main.get_user_email('PUSER01')
+
+    def test_rate_limit_skips_the_whole_sync(self):
+        # End to end: a PD 429 mid-run must leave the group untouched,
+        # not update it without the person we couldn't look up.
+        v3_body = {'schedule': {'final_schedule': {'computed_shift_assignments': [
+            {'member': {'type': 'user_member', 'user_id': 'PUSER01'}},
+        ]}}}
+
+        def pd(method, url, **kwargs):
+            if '/v3/' in url:
+                return _mock_response(200, v3_body)
+            return _mock_response(429, {})
+
+        with patch.object(main.http, 'request', side_effect=pd), \
+             patch.object(main, 'sync_usergroup') as mock_sync:
+            main.sync_oncall_usergroup('S123', ['PSHIFT1'])
+        mock_sync.assert_not_called()
 
 
 # ---------------------------------------------------------------------------

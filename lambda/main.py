@@ -299,18 +299,27 @@ def get_oncall_emails(schedule_id):
 
 
 def get_user_email(user_id):
-    """Resolve a PagerDuty user_id to an email via the v2 /users endpoint."""
+    """Resolve a PagerDuty user_id to an email via the v2 /users endpoint.
+
+    Returns None only when the user genuinely doesn't exist (404). Any other
+    failure (rate limit, 5xx, malformed body) raises RuntimeError so the
+    caller skips this run instead of syncing a group that's missing someone.
+    """
     global PD_API_KEY
     headers = {
         'Accept': 'application/vnd.pagerduty+json;version=2',
         'Authorization': 'Token token={token}'.format(token=PD_API_KEY)
     }
     response = http.request('GET', 'https://api.pagerduty.com/users/{0}'.format(user_id), headers=headers)
+    if response.status == 404:
+        logger.warning("PagerDuty user {} not found; skipping them".format(user_id))
+        return None
+    if response.status != 200:
+        raise RuntimeError("PagerDuty user lookup failed for {}: HTTP {}".format(user_id, response.status))
     try:
         return json.loads(response.data.decode('utf-8'))['user']['email']
     except (KeyError, ValueError):
-        logger.warning("Could not resolve email for PagerDuty user {}".format(user_id))
-        return None
+        raise RuntimeError("Unexpected PagerDuty response for user {}".format(user_id))
 
 
 def slack_api(method, http_method, fields):
@@ -330,18 +339,48 @@ def slack_api(method, http_method, fields):
     return body
 
 
+ONCALL_HANDLE_SUFFIX = '-oncall'
+
+
+def get_usergroup_handle(usergroup_id):
+    """Return the handle (e.g. 'my-team-oncall') of a user group, or None if it doesn't exist."""
+    body = slack_api('usergroups.list', 'GET', {})
+    if not body.get('ok'):
+        raise RuntimeError("Slack usergroups.list failed: {}".format(body.get('error')))
+    for group in body.get('usergroups', []):
+        if group.get('id') == usergroup_id:
+            return group.get('handle')
+    return None
+
+
 def sync_usergroup(usergroup_id, emails):
     """Make a Slack user group contain exactly the given on-call people.
 
+    Only groups whose handle ends in '-oncall' are ever modified, so the bot
+    can't be pointed at a group that carries real permissions.
+
     Requires the bot scopes users:read.email, usergroups:read and usergroups:write.
+    Raises RuntimeError on any Slack error other than a missing user, so the
+    caller skips this run rather than writing a partial group.
     """
+    handle = get_usergroup_handle(usergroup_id)
+    if handle is None:
+        logger.warning("User group {} not found (or disabled); skipping".format(usergroup_id))
+        return
+    if not handle.endswith(ONCALL_HANDLE_SUFFIX):
+        logger.warning("Refusing to sync user group {} (@{}): handle must end in '{}'".format(
+            usergroup_id, handle, ONCALL_HANDLE_SUFFIX))
+        return
+
     desired = set()
     for email in emails:
         body = slack_api('users.lookupByEmail', 'GET', {'email': email})
         if body.get('ok'):
             desired.add(body['user']['id'])
+        elif body.get('error') == 'users_not_found':
+            logger.warning("No Slack user found for {}; skipping them".format(email))
         else:
-            logger.warning("No Slack user found for {}".format(email))
+            raise RuntimeError("Slack users.lookupByEmail failed: {}".format(body.get('error')))
 
     if not desired:
         # Slack does not allow emptying a user group with usergroups.users.update,
