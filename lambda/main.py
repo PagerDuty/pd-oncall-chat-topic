@@ -341,9 +341,17 @@ def slack_api(method, http_method, fields):
 
 ONCALL_HANDLE_SUFFIX = '-oncall'
 
-# Slack user groups this bot is allowed to manage. IT approved the
-# usergroups:write scope on the condition that managed groups are listed
-# explicitly here, so adding a group requires a reviewed code change.
+# Slack user groups this bot is allowed to manage.
+#
+# TEMPORARY, ENGINEERING BLOG ONLY. IT approved the usergroups:write scope
+# (a restricted scope) for this app temporarily, on the condition that:
+#   - only the Engineering Blog's groups below are managed, and
+#   - the approval lasts only until PagerDuty natively supports syncing
+#     schedule on-call users to Slack user groups.
+#
+# Do NOT add other groups here without new approval from IT.
+# Removal of this feature and the extra Slack scopes is tracked in FEP-1695:
+# https://pagerduty.atlassian.net/browse/FEP-1695
 ALLOWED_USERGROUPS = frozenset([
     'S0CF1H9LA01',  # @eng-blog-triage-oncall
     'S0CETDQT70T',  # @eng-blog-review-oncall
