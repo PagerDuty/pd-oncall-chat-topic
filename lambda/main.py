@@ -341,6 +341,14 @@ def slack_api(method, http_method, fields):
 
 ONCALL_HANDLE_SUFFIX = '-oncall'
 
+# Slack user groups this bot is allowed to manage. IT approved the
+# usergroups:write scope on the condition that managed groups are listed
+# explicitly here, so adding a group requires a reviewed code change.
+ALLOWED_USERGROUPS = frozenset([
+    'S0CF1H9LA01',  # @eng-blog-triage-oncall
+    'S0CETDQT70T',  # @eng-blog-review-oncall
+])
+
 
 def get_usergroup_handle(usergroup_id):
     """Return the handle (e.g. 'my-team-oncall') of a user group, or None if it doesn't exist."""
@@ -356,13 +364,18 @@ def get_usergroup_handle(usergroup_id):
 def sync_usergroup(usergroup_id, emails):
     """Make a Slack user group contain exactly the given on-call people.
 
-    Only groups whose handle ends in '-oncall' are ever modified, so the bot
-    can't be pointed at a group that carries real permissions.
+    Only groups listed in ALLOWED_USERGROUPS, and whose handle ends in
+    '-oncall', are ever modified, so the bot can't be pointed at a group
+    that carries real permissions.
 
-    Requires the bot scopes users:read.email, usergroups:read and usergroups:write.
-    Raises RuntimeError on any Slack error other than a missing user, so the
-    caller skips this run rather than writing a partial group.
+    Requires the bot scopes users:read, users:read.email, usergroups:read and
+    usergroups:write. Raises RuntimeError on any Slack error other than a
+    missing user, so the caller skips this run rather than writing a partial group.
     """
+    if usergroup_id not in ALLOWED_USERGROUPS:
+        logger.warning("Refusing to sync user group {}: not in ALLOWED_USERGROUPS".format(usergroup_id))
+        return
+
     handle = get_usergroup_handle(usergroup_id)
     if handle is None:
         logger.warning("User group {} not found (or disabled); skipping".format(usergroup_id))

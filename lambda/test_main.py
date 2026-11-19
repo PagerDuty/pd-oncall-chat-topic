@@ -277,6 +277,12 @@ class TestGetOncallEmails(unittest.TestCase):
 # sync_usergroup: only calls usergroups.users.update when membership changes
 # ---------------------------------------------------------------------------
 class TestSyncUsergroup(unittest.TestCase):
+    def setUp(self):
+        # Tests use 'S123' as the group under sync; allowlist it for this class.
+        patcher = patch.object(main, 'ALLOWED_USERGROUPS', frozenset({'S123'}))
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
     def _fake_slack(self, current_members, known_users, handle='my-team-oncall', lookup_error=None):
         calls = []
 
@@ -318,6 +324,12 @@ class TestSyncUsergroup(unittest.TestCase):
         with patch.object(main, 'slack_api', side_effect=fake):
             main.sync_usergroup('S123', ['a@example.com', 'unknown@example.com'])
         self.assertIn(('usergroups.users.update', {'usergroup': 'S123', 'users': 'UA'}), calls)
+
+    def test_refuses_group_not_in_allowlist_without_calling_slack(self):
+        fake, calls = self._fake_slack(['UOLD'], {'a@example.com': 'UA'}, handle='other-team-oncall')
+        with patch.object(main, 'slack_api', side_effect=fake):
+            main.sync_usergroup('S999', ['a@example.com'])
+        self.assertEqual(calls, [])
 
     def test_refuses_group_without_oncall_suffix(self):
         fake, calls = self._fake_slack(['UOLD'], {'a@example.com': 'UA'}, handle='eng-admins')
