@@ -359,6 +359,27 @@ class TestSyncUsergroup(unittest.TestCase):
 
 
 # ---------------------------------------------------------------------------
+# parse_allowed_usergroups: allowlist comes from the ALLOWED_USERGROUPS env var
+# ---------------------------------------------------------------------------
+class TestParseAllowedUsergroups(unittest.TestCase):
+    def test_parses_comma_separated_ids(self):
+        self.assertEqual(main.parse_allowed_usergroups('S111, S222 ,S333'),
+                         frozenset({'S111', 'S222', 'S333'}))
+
+    def test_unset_or_empty_disables_sync(self):
+        self.assertEqual(main.parse_allowed_usergroups(None), frozenset())
+        self.assertEqual(main.parse_allowed_usergroups(''), frozenset())
+        self.assertEqual(main.parse_allowed_usergroups(' , '), frozenset())
+
+    def test_empty_allowlist_never_calls_slack(self):
+        calls = []
+        with patch.object(main, 'ALLOWED_USERGROUPS', frozenset()), \
+             patch.object(main, 'slack_api', side_effect=lambda *a: calls.append(a)):
+            main.sync_usergroup('S123', ['a@example.com'])
+        self.assertEqual(calls, [])
+
+
+# ---------------------------------------------------------------------------
 # get_user_email: None only for a real 404; anything else raises
 # ---------------------------------------------------------------------------
 class TestGetUserEmail(unittest.TestCase):
@@ -410,7 +431,7 @@ class TestDoWorkUsergroup(unittest.TestCase):
             'usergroup': {'S': 'S123'},
         }
         with patch.object(main, 'get_user', return_value='Alice Example'), \
-             patch.object(main, 'get_pd_schedule_name', return_value='Eng Blog Review'), \
+             patch.object(main, 'get_pd_schedule_name', return_value='Example Schedule'), \
              patch.object(main, 'update_slack_topic'), \
              patch.object(main, 'sync_oncall_usergroup') as mock_sync:
             main.do_work(ddb_item)
